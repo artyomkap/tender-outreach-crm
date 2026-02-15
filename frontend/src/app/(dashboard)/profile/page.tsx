@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import Header from '@/components/header';
 import { ROLE_LABELS } from '@/types';
@@ -10,12 +10,22 @@ import { Save } from 'lucide-react';
 export default function ProfilePage() {
   const { user, refetch } = useAuth();
   const [form, setForm] = useState({
-    firstName: user?.firstName || '',
-    lastName: user?.lastName || '',
-    phone: user?.phone || '',
+    firstName: '',
+    lastName: '',
+    phone: '',
   });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    if (user) {
+      setForm({
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        phone: user.phone || '',
+      });
+    }
+  }, [user]);
 
   if (!user) return null;
 
