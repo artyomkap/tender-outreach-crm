@@ -16,14 +16,17 @@ export default function DashboardLayout({
   const { user, loading, logout } = useAuth();
   const { setTheme, setColorMode } = useTheme();
   const debounceTimer = useRef<NodeJS.Timeout>();
+  const initialSyncDone = useRef(false);
 
-  // Sync user settings from backend into theme context on login
+  // Sync user settings from backend into theme context ONCE on initial load.
+  // After that, the local context is the source of truth (persisted via localStorage).
   useEffect(() => {
-    if (user?.settings) {
+    if (!initialSyncDone.current && user?.settings) {
       if (user.settings.theme) setTheme(user.settings.theme);
       if (user.settings.colorMode) setColorMode(user.settings.colorMode);
+      initialSyncDone.current = true;
     }
-  }, [user?.settings?.theme, user?.settings?.colorMode, setTheme, setColorMode]);
+  }, [user?.settings, setTheme, setColorMode]);
 
   // Persist theme changes to backend (debounced)
   const handleSettingsChange = useCallback(

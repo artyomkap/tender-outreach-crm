@@ -55,17 +55,17 @@ function CreateUserModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">Новый пользователь</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <h3 className="text-lg font-semibold dark:text-gray-100">Новый пользователь</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
             <X size={20} />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-lg border border-red-200">
+            <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-sm px-4 py-3 rounded-lg border border-red-200 dark:border-red-800">
               {error}
             </div>
           )}
@@ -171,17 +171,17 @@ function EditUserModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">Редактировать пользователя</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <h3 className="text-lg font-semibold dark:text-gray-100">Редактировать пользователя</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
             <X size={20} />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-lg border border-red-200">
+            <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-sm px-4 py-3 rounded-lg border border-red-200 dark:border-red-800">
               {error}
             </div>
           )}
@@ -214,7 +214,7 @@ function EditUserModal({
           />
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Роль</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Роль</label>
             <select
               value={form.role}
               onChange={(e) => setForm((p) => ({ ...p, role: e.target.value }))}
@@ -235,7 +235,7 @@ function EditUserModal({
               onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.checked }))}
               className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
             />
-            <span className="text-sm text-gray-700">Активен</span>
+            <span className="text-sm text-gray-700 dark:text-gray-300">Активен</span>
           </label>
 
           <div className="flex gap-3 pt-2">
@@ -298,8 +298,8 @@ export default function AdminUsersPage() {
       <Header title="Управление пользователями" user={user} />
       <div className="p-6">
         <div className="flex items-center justify-between mb-6">
-          <p className="text-sm text-gray-500">
-            Всего: <span className="font-medium text-gray-700">{total}</span>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Всего: <span className="font-medium text-gray-700 dark:text-gray-300">{total}</span>
           </p>
           <button
             onClick={() => setShowCreate(true)}
@@ -314,15 +314,15 @@ export default function AdminUsersPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="text-left px-6 py-3 font-medium text-gray-500">Пользователь</th>
-                  <th className="text-left px-6 py-3 font-medium text-gray-500">Email</th>
-                  <th className="text-left px-6 py-3 font-medium text-gray-500">Роль</th>
-                  <th className="text-left px-6 py-3 font-medium text-gray-500">Статус</th>
-                  <th className="text-right px-6 py-3 font-medium text-gray-500">Действия</th>
+                <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
+                  <th className="text-left px-6 py-3 font-medium text-gray-500 dark:text-gray-400">Пользователь</th>
+                  <th className="text-left px-6 py-3 font-medium text-gray-500 dark:text-gray-400">Email</th>
+                  <th className="text-left px-6 py-3 font-medium text-gray-500 dark:text-gray-400">Роль</th>
+                  <th className="text-left px-6 py-3 font-medium text-gray-500 dark:text-gray-400">Статус</th>
+                  <th className="text-right px-6 py-3 font-medium text-gray-500 dark:text-gray-400">Действия</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {loading ? (
                   <tr>
                     <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
@@ -339,18 +339,18 @@ export default function AdminUsersPage() {
                   </tr>
                 ) : (
                   users.map((u) => (
-                    <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-sm font-medium">
+                          <div className="w-8 h-8 bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 rounded-full flex items-center justify-center text-sm font-medium">
                             {u.firstName[0]}
                           </div>
-                          <span className="font-medium text-gray-900">
+                          <span className="font-medium text-gray-900 dark:text-gray-100">
                             {u.firstName} {u.lastName}
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-gray-600">{u.email}</td>
+                      <td className="px-6 py-4 text-gray-600 dark:text-gray-300">{u.email}</td>
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-700">
                           {ROLE_LABELS[u.role] || u.role}
@@ -395,8 +395,8 @@ export default function AdminUsersPage() {
           </div>
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200">
-              <p className="text-sm text-gray-500">
+            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
                 Страница {page} из {totalPages}
               </p>
               <div className="flex gap-2">

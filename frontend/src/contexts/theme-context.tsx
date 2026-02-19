@@ -62,11 +62,12 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     localStorage.setItem(STORAGE_KEY_COLOR_MODE, m);
   }, []);
 
-  // Apply dark class to <html>
+  // Apply dark class and data-theme attribute to <html>
   useEffect(() => {
     if (!mounted) return;
     document.documentElement.classList.toggle('dark', colorMode === 'dark');
-  }, [colorMode, mounted]);
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [colorMode, theme, mounted]);
 
   return (
     <ThemeContext.Provider

@@ -12,6 +12,7 @@
 }
 
 @layer components {
+  /* ===== Classic theme (default) ===== */
   .btn-primary {
     @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2.5 px-5 rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
   }
@@ -40,4 +41,53 @@
   .dark .card {
     @apply bg-gray-800 border-gray-700;
   }
+}
+
+/* ===== Modern theme overrides ===== */
+/* These apply via [data-theme="modern"] on <html>, so all pages
+   get the modern look without needing to swap to themed components. */
+
+[data-theme="modern"] body {
+  @apply bg-slate-100;
+  font-family: var(--default-font-family, ui-sans-serif, system-ui, sans-serif);
+}
+[data-theme="modern"].dark body {
+  @apply bg-slate-950;
+}
+
+[data-theme="modern"] .card {
+  @apply bg-white rounded-2xl shadow-md border-0 p-6;
+}
+[data-theme="modern"].dark .card {
+  @apply bg-slate-900 shadow-lg;
+}
+
+[data-theme="modern"] .btn-primary {
+  @apply bg-blue-600 hover:bg-blue-500 rounded-full px-6 shadow-sm;
+}
+
+[data-theme="modern"] .btn-secondary {
+  @apply bg-white hover:bg-slate-50 text-slate-700 rounded-full px-6 border-slate-200 shadow-sm;
+}
+[data-theme="modern"].dark .btn-secondary {
+  @apply bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700;
+}
+
+[data-theme="modern"] .btn-danger {
+  @apply bg-red-500 hover:bg-red-400 rounded-full px-6 shadow-sm;
+}
+
+[data-theme="modern"] .input-field {
+  @apply bg-white border-slate-200 rounded-xl focus:ring-blue-400 focus:border-blue-400 shadow-sm;
+}
+[data-theme="modern"].dark .input-field {
+  @apply bg-slate-900 border-slate-700 text-slate-100 placeholder-slate-500;
+}
+
+/* Modern header */
+[data-theme="modern"] header {
+  @apply bg-white/80 backdrop-blur-sm border-slate-200/60;
+}
+[data-theme="modern"].dark header {
+  @apply bg-slate-900/80 backdrop-blur-sm border-slate-800/60;
 }

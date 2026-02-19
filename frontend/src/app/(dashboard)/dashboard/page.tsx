@@ -33,8 +33,8 @@ function StatCard({
     <div className="card flex items-center gap-4">
       <div className={`p-3 rounded-xl ${color}`}>{icon}</div>
       <div>
-        <p className="text-sm text-gray-500">{title}</p>
-        <p className="text-2xl font-bold text-gray-900">{value}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">{title}</p>
+        <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{value}</p>
       </div>
     </div>
   );
@@ -91,12 +91,12 @@ function AdminDashboard({ user }: { user: User }) {
 
       {stats?.byRole && (
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Пользователи по ролям</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Пользователи по ролям</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {Object.entries(stats.byRole).map(([role, count]) => (
-              <div key={role} className="bg-gray-50 rounded-lg p-4 text-center">
-                <p className="text-2xl font-bold text-gray-900">{count}</p>
-                <p className="text-sm text-gray-500 mt-1">
+              <div key={role} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 text-center">
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{count}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                   {ROLE_LABELS[role as Role] || role}
                 </p>
               </div>
@@ -112,10 +112,10 @@ function UserDashboard({ user }: { user: User }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div className="card">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Добро пожаловать!</h3>
-        <p className="text-gray-600">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Добро пожаловать!</h3>
+        <p className="text-gray-600 dark:text-gray-300">
           {user.firstName} {user.lastName}, вы вошли как{' '}
-          <span className="font-medium text-primary-600">
+          <span className="font-medium text-primary-600 dark:text-primary-400">
             {ROLE_LABELS[user.role]}
           </span>
           .
@@ -123,18 +123,18 @@ function UserDashboard({ user }: { user: User }) {
       </div>
 
       <div className="card">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Информация</h3>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Информация</h3>
         <div className="space-y-3 text-sm">
           <div className="flex justify-between">
-            <span className="text-gray-500">Email</span>
-            <span className="font-medium">{user.email}</span>
+            <span className="text-gray-500 dark:text-gray-400">Email</span>
+            <span className="font-medium dark:text-gray-200">{user.email}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-500">Роль</span>
-            <span className="font-medium">{ROLE_LABELS[user.role]}</span>
+            <span className="text-gray-500 dark:text-gray-400">Роль</span>
+            <span className="font-medium dark:text-gray-200">{ROLE_LABELS[user.role]}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-500">Статус</span>
+            <span className="text-gray-500 dark:text-gray-400">Статус</span>
             <span className="inline-flex items-center gap-1 font-medium text-green-600">
               <span className="w-2 h-2 bg-green-500 rounded-full" />
               Активен

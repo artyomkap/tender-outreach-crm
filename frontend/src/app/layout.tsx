@@ -19,8 +19,13 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               try {
+                var d = document.documentElement;
                 if (localStorage.getItem('app-color-mode') === 'dark') {
-                  document.documentElement.classList.add('dark');
+                  d.classList.add('dark');
+                }
+                var t = localStorage.getItem('app-theme');
+                if (t === 'classic' || t === 'modern') {
+                  d.setAttribute('data-theme', t);
                 }
               } catch(e) {}
             `,
