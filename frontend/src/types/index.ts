@@ -109,3 +109,27 @@ export interface UserPurchaseHistory {
   foundAt: string;
   purchase: Purchase;
 }
+
+export interface SearchQueryRecord {
+  id: string;
+  userId: string;
+  queryParams: Record<string, unknown>;
+  resultsCount: number;
+  createdAt: string;
+}
+
+export interface FoundPurchase {
+  id: string;
+  userId: string;
+  purchaseId: string;
+  searchQueryId: string | null;
+  isFavorite: boolean;
+  createdAt: string;
+  purchase: Purchase;
+}
+
+export interface SearchResponse {
+  results: Purchase[];
+  debugUrl: string;
+  searchQueryId: string;
+}

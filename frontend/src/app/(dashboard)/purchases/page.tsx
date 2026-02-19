@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import Header from '@/components/header';
 import { api } from '@/lib/api';
-import { Purchase } from '@/types';
+import { Purchase, SearchResponse } from '@/types';
 import {
   Search,
   ChevronDown,
@@ -12,6 +12,9 @@ import {
   ExternalLink,
   FileText,
   Clock,
+  Star,
+  History,
+  FolderSearch,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -47,11 +50,13 @@ export default function PurchasesPage() {
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [debugUrl, setDebugUrl] = useState('');
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
   const [form, setForm] = useState({
     objectInfo: '',
-    region: '52',
-    stage: '1',
+    region: '',
+    stage: '',
     publishedAfter: '',
     publishedBefore: '',
     priceGe: '',
@@ -62,15 +67,15 @@ export default function PurchasesPage() {
   const handleSearch = useCallback(
     async (e?: React.FormEvent) => {
       if (e) e.preventDefault();
-      if (!form.objectInfo.trim()) return;
 
       setLoading(true);
       setError('');
       setSearched(true);
+      setDebugUrl('');
 
       try {
         const params = new URLSearchParams();
-        params.set('objectInfo', form.objectInfo.trim());
+        if (form.objectInfo.trim()) params.set('objectInfo', form.objectInfo.trim());
         params.set('limit', form.limit);
         params.set('skip', '0');
         if (form.stage) params.set('stage', form.stage);
@@ -80,8 +85,9 @@ export default function PurchasesPage() {
         if (form.priceGe) params.set('priceGe', form.priceGe);
         if (form.priceLe) params.set('priceLe', form.priceLe);
 
-        const data = await api.get<Purchase[]>(`/purchases/search?${params.toString()}`);
-        setResults(data);
+        const data = await api.get<SearchResponse>(`/purchases/search?${params.toString()}`);
+        setResults(data.results);
+        setDebugUrl(data.debugUrl);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Ошибка поиска');
         setResults([]);
@@ -91,6 +97,23 @@ export default function PurchasesPage() {
     },
     [form],
   );
+
+  const toggleFavorite = useCallback(async (purchaseId: string) => {
+    try {
+      const res = await api.post<{ isFavorite: boolean }>(`/purchases/favorites/${purchaseId}`, {});
+      setFavorites((prev) => {
+        const next = new Set(prev);
+        if (res.isFavorite) {
+          next.add(purchaseId);
+        } else {
+          next.delete(purchaseId);
+        }
+        return next;
+      });
+    } catch {
+      // ignore
+    }
+  }, []);
 
   if (!user) return null;
 
@@ -112,7 +135,6 @@ export default function PurchasesPage() {
                 value={form.objectInfo}
                 onChange={(e) => setForm((p) => ({ ...p, objectInfo: e.target.value }))}
                 className="input-field !pl-10"
-                required
               />
             </div>
             <button type="submit" disabled={loading} className="btn-primary flex items-center gap-2">
@@ -151,7 +173,7 @@ export default function PurchasesPage() {
                   value={form.region}
                   onChange={(e) => setForm((p) => ({ ...p, region: e.target.value }))}
                   className="input-field"
-                  placeholder="52"
+                  placeholder="Все"
                 />
               </div>
               <div>
@@ -234,21 +256,59 @@ export default function PurchasesPage() {
           )}
         </form>
 
-        {/* History link */}
-        <div className="flex items-center justify-between mb-4">
+        {/* Navigation links */}
+        <div className="flex flex-wrap items-center gap-4 mb-4">
           {searched && (
             <p className="text-sm text-gray-500 dark:text-gray-400">
               Найдено: <span className="font-medium text-gray-700 dark:text-gray-300">{results.length}</span>
             </p>
           )}
-          <Link
-            href="/purchases/history"
-            className="flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors ml-auto"
-          >
-            <Clock size={16} />
-            История просмотров
-          </Link>
+          <div className="flex items-center gap-4 ml-auto">
+            <Link
+              href="/purchases/search-queries"
+              className="flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
+            >
+              <History size={16} />
+              История запросов
+            </Link>
+            <Link
+              href="/purchases/found"
+              className="flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
+            >
+              <FolderSearch size={16} />
+              Найденные
+            </Link>
+            <Link
+              href="/purchases/favorites"
+              className="flex items-center gap-1.5 text-sm text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 transition-colors"
+            >
+              <Star size={16} />
+              Избранное
+            </Link>
+            <Link
+              href="/purchases/history"
+              className="flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
+            >
+              <Clock size={16} />
+              История просмотров
+            </Link>
+          </div>
         </div>
+
+        {/* Debug URL */}
+        {debugUrl && (
+          <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 mb-4">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 font-medium">Debug URL:</p>
+            <a
+              href={debugUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-primary-600 dark:text-primary-400 hover:underline break-all font-mono"
+            >
+              {debugUrl}
+            </a>
+          </div>
+        )}
 
         {/* Error */}
         {error && (
@@ -281,7 +341,7 @@ export default function PurchasesPage() {
                         href={`/purchases/${purchase.purchaseNumber}`}
                         className="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium text-sm transition-colors"
                       >
-                        № {purchase.purchaseNumber}
+                        {purchase.purchaseNumber}
                       </Link>
                       {purchase.stage !== null && (
                         <span
@@ -316,12 +376,25 @@ export default function PurchasesPage() {
                     <p className="text-lg font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
                       {formatPrice(purchase.maxPrice, purchase.currencyCode)}
                     </p>
-                    <Link
-                      href={`/purchases/${purchase.purchaseNumber}`}
-                      className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 transition-colors"
-                    >
-                      Подробнее <ExternalLink size={12} />
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => toggleFavorite(purchase.id)}
+                        className={`p-1.5 rounded-lg transition-colors ${
+                          favorites.has(purchase.id)
+                            ? 'text-amber-500 hover:text-amber-600'
+                            : 'text-gray-400 hover:text-amber-500'
+                        }`}
+                        title={favorites.has(purchase.id) ? 'Убрать из избранного' : 'В избранное'}
+                      >
+                        <Star size={18} fill={favorites.has(purchase.id) ? 'currentColor' : 'none'} />
+                      </button>
+                      <Link
+                        href={`/purchases/${purchase.purchaseNumber}`}
+                        className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 transition-colors"
+                      >
+                        Подробнее <ExternalLink size={12} />
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </div>

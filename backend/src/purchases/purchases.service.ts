@@ -4,6 +4,8 @@ import { Repository } from 'typeorm';
 import { Purchase } from './entities/purchase.entity';
 import { PurchaseFile } from './entities/purchase-file.entity';
 import { UserPurchaseHistory } from './entities/user-purchase-history.entity';
+import { SearchQuery } from './entities/search-query.entity';
+import { FoundPurchase } from './entities/found-purchase.entity';
 import { SearchPurchasesDto } from './dto/search-purchases.dto';
 
 @Injectable()
@@ -17,28 +19,31 @@ export class PurchasesService {
     private readonly purchaseFileRepository: Repository<PurchaseFile>,
     @InjectRepository(UserPurchaseHistory)
     private readonly historyRepository: Repository<UserPurchaseHistory>,
+    @InjectRepository(SearchQuery)
+    private readonly searchQueryRepository: Repository<SearchQuery>,
+    @InjectRepository(FoundPurchase)
+    private readonly foundPurchaseRepository: Repository<FoundPurchase>,
   ) {}
 
-  async search(dto: SearchPurchasesDto, userId: string): Promise<Purchase[]> {
+  async search(
+    dto: SearchPurchasesDto,
+    userId: string,
+  ): Promise<{ results: Purchase[]; debugUrl: string; searchQueryId: string }> {
     // Build params only with explicitly provided values
     const params = new URLSearchParams();
 
-    // Always include limit and skip
     params.set('limit', String(dto.limit ?? 10));
     params.set('skip', String(dto.skip ?? 0));
     params.set('sort', 'updated_at_desc');
 
-    // Only include stage if explicitly provided
     if (dto.stage != null) {
       params.set('stage', String(dto.stage));
     }
 
-    // Only include region if explicitly provided
     if (dto.region != null) {
       params.set('region', String(dto.region));
     }
 
-    // Only include optional string params if they have values
     if (dto.publishedAfter) {
       params.set('published_after', dto.publishedAfter);
     }
@@ -62,6 +67,14 @@ export class PurchasesService {
     const url = `https://v2.gosplan.info/fz44/purchases?${params.toString()}`;
     this.logger.debug(`Search URL: ${url}`);
 
+    // Save search query
+    const searchQuery = this.searchQueryRepository.create({
+      userId,
+      queryParams: dto as unknown as Record<string, unknown>,
+      resultsCount: 0,
+    });
+    const savedSearchQuery = await this.searchQueryRepository.save(searchQuery);
+
     let listData: any[];
     try {
       const response = await fetch(url, {
@@ -69,17 +82,17 @@ export class PurchasesService {
       });
       if (!response.ok) {
         this.logger.error(`Search API returned status ${response.status}`);
-        return [];
+        return { results: [], debugUrl: url, searchQueryId: savedSearchQuery.id };
       }
       listData = await response.json();
     } catch (error) {
       this.logger.error(`Failed to fetch from search API: ${error.message}`);
-      return [];
+      return { results: [], debugUrl: url, searchQueryId: savedSearchQuery.id };
     }
 
     if (!Array.isArray(listData)) {
       this.logger.error('Search API returned non-array response');
-      return [];
+      return { results: [], debugUrl: url, searchQueryId: savedSearchQuery.id };
     }
 
     const results: Purchase[] = [];
@@ -111,7 +124,6 @@ export class PurchasesService {
           });
           purchase = await this.purchaseRepository.save(purchase);
         } else if (!purchase.detailFetchedAt) {
-          // Update list data fields if detail hasn't been fetched yet
           purchase.objectInfo = item.object_info || purchase.objectInfo;
           purchase.maxPrice = item.max_price ?? purchase.maxPrice;
           purchase.currencyCode = item.currency_code || purchase.currencyCode;
@@ -140,13 +152,27 @@ export class PurchasesService {
         if (purchase) {
           results.push(purchase);
 
-          // Record history
+          // Record in user_purchase_history
           const historyEntry = this.historyRepository.create({
             userId,
             purchaseId: purchase.id,
             searchQuery: dto.objectInfo || null,
           });
           await this.historyRepository.save(historyEntry);
+
+          // Upsert found_purchase (user + purchase unique)
+          const existing = await this.foundPurchaseRepository.findOne({
+            where: { userId, purchaseId: purchase.id },
+          });
+          if (!existing) {
+            const foundPurchase = this.foundPurchaseRepository.create({
+              userId,
+              purchaseId: purchase.id,
+              searchQueryId: savedSearchQuery.id,
+              isFavorite: false,
+            });
+            await this.foundPurchaseRepository.save(foundPurchase);
+          }
         }
       } catch (error) {
         this.logger.error(
@@ -155,8 +181,97 @@ export class PurchasesService {
       }
     }
 
-    return results;
+    // Update results count
+    savedSearchQuery.resultsCount = results.length;
+    await this.searchQueryRepository.save(savedSearchQuery);
+
+    return { results, debugUrl: url, searchQueryId: savedSearchQuery.id };
   }
+
+  // --- Search queries history ---
+
+  async getSearchQueries(
+    userId: string,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<{ data: SearchQuery[]; total: number }> {
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await this.searchQueryRepository.findAndCount({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+      skip,
+      take: limit,
+    });
+
+    return { data, total };
+  }
+
+  // --- Found purchases ---
+
+  async getFoundPurchases(
+    userId: string,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<{ data: FoundPurchase[]; total: number }> {
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await this.foundPurchaseRepository.findAndCount({
+      where: { userId },
+      relations: ['purchase', 'purchase.files'],
+      order: { createdAt: 'DESC' },
+      skip,
+      take: limit,
+    });
+
+    return { data, total };
+  }
+
+  // --- Favorites ---
+
+  async getFavorites(
+    userId: string,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<{ data: FoundPurchase[]; total: number }> {
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await this.foundPurchaseRepository.findAndCount({
+      where: { userId, isFavorite: true },
+      relations: ['purchase', 'purchase.files'],
+      order: { createdAt: 'DESC' },
+      skip,
+      take: limit,
+    });
+
+    return { data, total };
+  }
+
+  async toggleFavorite(
+    userId: string,
+    purchaseId: string,
+  ): Promise<{ isFavorite: boolean }> {
+    let foundPurchase = await this.foundPurchaseRepository.findOne({
+      where: { userId, purchaseId },
+    });
+
+    if (!foundPurchase) {
+      // Auto-create if user tries to favorite a purchase they haven't found yet
+      foundPurchase = this.foundPurchaseRepository.create({
+        userId,
+        purchaseId,
+        isFavorite: true,
+      });
+      await this.foundPurchaseRepository.save(foundPurchase);
+      return { isFavorite: true };
+    }
+
+    foundPurchase.isFavorite = !foundPurchase.isFavorite;
+    await this.foundPurchaseRepository.save(foundPurchase);
+    return { isFavorite: foundPurchase.isFavorite };
+  }
+
+  // --- View history (existing) ---
 
   async getHistory(
     userId: string,
@@ -186,7 +301,6 @@ export class PurchasesService {
       return null;
     }
 
-    // Fetch detail if not yet fetched
     if (!purchase.detailFetchedAt) {
       await this.fetchAndStoreDetail(purchase);
       purchase = await this.purchaseRepository.findOne({
@@ -247,7 +361,6 @@ export class PurchasesService {
         let attachments = attachmentsInfo.attachmentInfo;
         if (!attachments) continue;
 
-        // Normalize to array
         if (!Array.isArray(attachments)) {
           attachments = [attachments];
         }
@@ -256,7 +369,6 @@ export class PurchasesService {
           const publishedContentId = attachment.publishedContentId;
           if (!publishedContentId) continue;
 
-          // Check if file already exists
           const existing = await this.purchaseFileRepository.findOne({
             where: {
               purchaseId,

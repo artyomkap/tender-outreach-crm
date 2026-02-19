@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Param,
   Query,
   UseGuards,
@@ -28,6 +29,41 @@ export class PurchasesController {
     @CurrentUser() user: User,
   ) {
     return this.purchasesService.search(dto, user.id);
+  }
+
+  @Get('search-queries')
+  getSearchQueries(
+    @CurrentUser() user: User,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+  ) {
+    return this.purchasesService.getSearchQueries(user.id, page, limit);
+  }
+
+  @Get('found')
+  getFoundPurchases(
+    @CurrentUser() user: User,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+  ) {
+    return this.purchasesService.getFoundPurchases(user.id, page, limit);
+  }
+
+  @Get('favorites')
+  getFavorites(
+    @CurrentUser() user: User,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+  ) {
+    return this.purchasesService.getFavorites(user.id, page, limit);
+  }
+
+  @Post('favorites/:purchaseId')
+  toggleFavorite(
+    @CurrentUser() user: User,
+    @Param('purchaseId') purchaseId: string,
+  ) {
+    return this.purchasesService.toggleFavorite(user.id, purchaseId);
   }
 
   @Get('history')

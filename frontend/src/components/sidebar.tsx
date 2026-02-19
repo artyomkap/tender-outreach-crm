@@ -19,6 +19,10 @@ import {
   LogOut,
   Menu,
   X,
+  History,
+  FolderSearch,
+  Star,
+  Clock,
 } from 'lucide-react';
 import { useState } from 'react';
 import SshSidebarSection from './ssh-sidebar-section';
@@ -30,20 +34,49 @@ interface NavItem {
   href: string;
   icon: React.ReactNode;
   roles: Role[];
+  children?: NavItem[];
 }
+
+const ALL_ROLES = [Role.ADMIN, Role.DIRECTOR, Role.MANAGER, Role.SUPPORT, Role.SELLER, Role.MARKETER, Role.CLIENT, Role.PARTNER];
 
 const navItems: NavItem[] = [
   {
     label: 'Дашборд',
     href: '/dashboard',
     icon: <LayoutDashboard size={20} />,
-    roles: [Role.ADMIN, Role.DIRECTOR, Role.MANAGER, Role.SUPPORT, Role.SELLER, Role.MARKETER, Role.CLIENT, Role.PARTNER],
+    roles: ALL_ROLES,
   },
   {
     label: 'Закупки',
     href: '/purchases',
     icon: <ShoppingCart size={20} />,
-    roles: [Role.ADMIN, Role.DIRECTOR, Role.MANAGER, Role.SUPPORT, Role.SELLER, Role.MARKETER, Role.CLIENT, Role.PARTNER],
+    roles: ALL_ROLES,
+    children: [
+      {
+        label: 'История запросов',
+        href: '/purchases/search-queries',
+        icon: <History size={16} />,
+        roles: ALL_ROLES,
+      },
+      {
+        label: 'Найденные',
+        href: '/purchases/found',
+        icon: <FolderSearch size={16} />,
+        roles: ALL_ROLES,
+      },
+      {
+        label: 'Избранное',
+        href: '/purchases/favorites',
+        icon: <Star size={16} />,
+        roles: ALL_ROLES,
+      },
+      {
+        label: 'История просмотров',
+        href: '/purchases/history',
+        icon: <Clock size={16} />,
+        roles: ALL_ROLES,
+      },
+    ],
   },
   {
     label: 'Пользователи',
@@ -55,7 +88,7 @@ const navItems: NavItem[] = [
     label: 'Профиль',
     href: '/profile',
     icon: <UserCircle size={20} />,
-    roles: [Role.ADMIN, Role.DIRECTOR, Role.MANAGER, Role.SUPPORT, Role.SELLER, Role.MARKETER, Role.CLIENT, Role.PARTNER],
+    roles: ALL_ROLES,
   },
 ];
 
@@ -99,21 +132,49 @@ export default function Sidebar({ user, onLogout, onSettingsChange }: SidebarPro
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {filteredItems.map((item) => {
           const isActive = pathname === item.href;
+          const isChildActive = item.children?.some((c) => pathname === c.href) ?? false;
+          const isExpanded = isActive || isChildActive || pathname.startsWith(item.href + '/');
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setMobileOpen(false)}
-              className={clsx(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150',
-                isActive
-                  ? 'bg-sidebar-active text-white'
-                  : 'text-gray-300 hover:bg-sidebar-hover hover:text-white',
+            <div key={item.href}>
+              <Link
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
+                className={clsx(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150',
+                  isActive
+                    ? 'bg-sidebar-active text-white'
+                    : 'text-gray-300 hover:bg-sidebar-hover hover:text-white',
+                )}
+              >
+                {item.icon}
+                {item.label}
+              </Link>
+              {item.children && isExpanded && (
+                <div className="ml-4 mt-1 space-y-0.5 border-l border-white/10 pl-3">
+                  {item.children
+                    .filter((c) => c.roles.includes(user.role))
+                    .map((child) => {
+                      const isChildItemActive = pathname === child.href;
+                      return (
+                        <Link
+                          key={child.href}
+                          href={child.href}
+                          onClick={() => setMobileOpen(false)}
+                          className={clsx(
+                            'flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-medium transition-colors duration-150',
+                            isChildItemActive
+                              ? 'bg-sidebar-active text-white'
+                              : 'text-gray-400 hover:bg-sidebar-hover hover:text-white',
+                          )}
+                        >
+                          {child.icon}
+                          {child.label}
+                        </Link>
+                      );
+                    })}
+                </div>
               )}
-            >
-              {item.icon}
-              {item.label}
-            </Link>
+            </div>
           );
         })}
 
