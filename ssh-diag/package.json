@@ -1,0 +1,11 @@
+{
+  "name": "ssh-diag",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "ssh2": "^1.17.0"
+  }
+}
