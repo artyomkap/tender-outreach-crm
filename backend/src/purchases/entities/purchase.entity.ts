@@ -29,10 +29,10 @@ export class Purchase {
   @Column({ name: 'purchase_type', length: 100, nullable: true })
   purchaseType: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   stage: number | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   region: number | null;
 
   @Column({ name: 'published_at', type: 'timestamp', nullable: true })

@@ -23,10 +23,10 @@ export class PurchaseFile {
   @Column({ name: 'published_content_id' })
   publishedContentId: string;
 
-  @Column({ name: 'file_name', nullable: true })
+  @Column({ name: 'file_name', type: 'varchar', nullable: true })
   fileName: string | null;
 
-  @Column({ name: 'file_size', nullable: true })
+  @Column({ name: 'file_size', type: 'bigint', nullable: true })
   fileSize: number | null;
 
   @Column({ name: 'doc_description', type: 'text', nullable: true })
@@ -41,16 +41,16 @@ export class PurchaseFile {
   @Column({ name: 'doc_kind_code', length: 20, nullable: true })
   docKindCode: string | null;
 
-  @Column({ name: 'doc_kind_name', nullable: true })
+  @Column({ name: 'doc_kind_name', type: 'varchar', nullable: true })
   docKindName: string | null;
 
   @Column({ name: 'doc_type', length: 100, nullable: true })
   docType: string | null;
 
-  @Column({ name: 'is_downloaded', default: false })
+  @Column({ name: 'is_downloaded', type: 'boolean', default: false })
   isDownloaded: boolean;
 
-  @Column({ name: 'local_path', nullable: true })
+  @Column({ name: 'local_path', type: 'varchar', nullable: true })
   localPath: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
