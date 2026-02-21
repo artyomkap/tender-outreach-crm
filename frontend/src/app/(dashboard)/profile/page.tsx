@@ -24,6 +24,7 @@ export default function ProfilePage() {
   const [aiForm, setAiForm] = useState({
     aiUrl: '',
     aiPrompt: '',
+    searchApiUrl: '',
   });
   const [saving, setSaving] = useState(false);
   const [savingUrls, setSavingUrls] = useState(false);
@@ -46,6 +47,7 @@ export default function ProfilePage() {
       setAiForm({
         aiUrl: user.settings?.aiUrl || '',
         aiPrompt: user.settings?.aiPrompt || '',
+        searchApiUrl: user.settings?.searchApiUrl || '',
       });
     }
   }, [user]);
@@ -249,6 +251,7 @@ export default function ProfilePage() {
                     ...user.settings,
                     aiUrl: aiForm.aiUrl || undefined,
                     aiPrompt: aiForm.aiPrompt || undefined,
+                    searchApiUrl: aiForm.searchApiUrl || undefined,
                   },
                 });
                 await refetch();
@@ -295,6 +298,21 @@ export default function ProfilePage() {
               />
               <p className="text-xs text-gray-400 mt-1">
                 Промпт будет отправлен вместе с названием закупки и текстами сохранённых документов.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Search API URL
+              </label>
+              <ThemedInput
+                type="url"
+                value={aiForm.searchApiUrl}
+                onChange={(e) => setAiForm((p) => ({ ...p, searchApiUrl: e.target.value }))}
+                placeholder="https://example.com/search/api.php?q="
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                URL поискового API. Поисковый запрос будет закодирован и добавлен в конец.
               </p>
             </div>
 

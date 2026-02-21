@@ -30,6 +30,7 @@ export interface UserSettings {
   proxyUrl?: string;
   aiUrl?: string;
   aiPrompt?: string;
+  searchApiUrl?: string;
 }
 
 export interface User {
@@ -145,6 +146,18 @@ export interface PurchaseAiResult {
   subject: string | null;
   body: string | null;
   searchTerm: AiSearchTerm | null;
+  createdAt: string;
+  purchase?: Purchase;
+}
+
+export interface WebSearchResult {
+  id: string;
+  searchTermId: string;
+  userId: string;
+  query: string;
+  url: string;
+  title: string;
+  snippet: string;
   createdAt: string;
 }
 

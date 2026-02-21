@@ -9,6 +9,7 @@ import { FoundPurchase } from './entities/found-purchase.entity';
 import { PurchaseAiResult } from './entities/purchase-ai-result.entity';
 import { AiSearchTerm } from './entities/ai-search-term.entity';
 import { AiSearchTermPurchase } from './entities/ai-search-term-purchase.entity';
+import { WebSearchResult } from './entities/web-search-result.entity';
 import { SearchPurchasesDto } from './dto/search-purchases.dto';
 
 @Injectable()
@@ -32,6 +33,8 @@ export class PurchasesService {
     private readonly aiSearchTermRepository: Repository<AiSearchTerm>,
     @InjectRepository(AiSearchTermPurchase)
     private readonly aiSearchTermPurchaseRepository: Repository<AiSearchTermPurchase>,
+    @InjectRepository(WebSearchResult)
+    private readonly webSearchResultRepository: Repository<WebSearchResult>,
   ) {}
 
   async search(
@@ -615,6 +618,131 @@ export class PurchasesService {
     return this.aiResultRepository.findOne({
       where: { userId, purchaseId },
       relations: ['searchTerm'],
+    });
+  }
+
+  // --- AI results list for user ---
+
+  async getUserAiResults(
+    userId: string,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<{ data: PurchaseAiResult[]; total: number }> {
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await this.aiResultRepository.findAndCount({
+      where: { userId },
+      relations: ['searchTerm', 'purchase'],
+      order: { createdAt: 'DESC' },
+      skip,
+      take: limit,
+    });
+
+    return { data, total };
+  }
+
+  // --- Search terms list for user ---
+
+  async getUserSearchTerms(
+    userId: string,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<{ data: any[]; total: number }> {
+    const skip = (page - 1) * limit;
+
+    const [junctions, total] = await this.aiSearchTermPurchaseRepository.findAndCount({
+      where: { userId },
+      relations: ['searchTerm'],
+      order: { createdAt: 'DESC' },
+      skip,
+      take: limit,
+    });
+
+    // Group by search term, deduplicate
+    const seen = new Set<string>();
+    const terms: AiSearchTerm[] = [];
+    for (const j of junctions) {
+      if (j.searchTerm && !seen.has(j.searchTerm.id)) {
+        seen.add(j.searchTerm.id);
+        terms.push(j.searchTerm);
+      }
+    }
+
+    return { data: terms, total };
+  }
+
+  // --- Execute web search ---
+
+  async executeWebSearch(
+    searchTermId: string,
+    user: { id: string; settings?: { searchApiUrl?: string } | null },
+  ): Promise<WebSearchResult[]> {
+    const searchApiUrl = user.settings?.searchApiUrl;
+    if (!searchApiUrl) {
+      throw new BadRequestException('Настройте Search API URL в профиле');
+    }
+
+    const term = await this.aiSearchTermRepository.findOne({
+      where: { id: searchTermId },
+    });
+    if (!term) {
+      throw new NotFoundException('Поисковый запрос не найден');
+    }
+
+    const url = searchApiUrl + encodeURIComponent(term.term);
+
+    try {
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(30000),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Search API returned status ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (!data.success || !Array.isArray(data.results)) {
+        throw new Error('Invalid search API response');
+      }
+
+      // Delete old results for this term+user
+      await this.webSearchResultRepository.delete({
+        searchTermId: term.id,
+        userId: user.id,
+      });
+
+      // Save new results
+      const results: WebSearchResult[] = [];
+      for (const item of data.results) {
+        const result = this.webSearchResultRepository.create({
+          searchTermId: term.id,
+          userId: user.id,
+          query: term.term,
+          url: item.url || '',
+          title: item.title || '',
+          snippet: item.snippet || '',
+          favicon: item.favicon || '',
+        });
+        results.push(await this.webSearchResultRepository.save(result));
+      }
+
+      return results;
+    } catch (error) {
+      this.logger.error(`Web search failed: ${error.message}`);
+      throw new BadRequestException(`Ошибка поиска: ${error.message}`);
+    }
+  }
+
+  // --- Get search results for a term ---
+
+  async getWebSearchResults(
+    searchTermId: string,
+    userId: string,
+  ): Promise<WebSearchResult[]> {
+    return this.webSearchResultRepository.find({
+      where: { searchTermId, userId },
+      order: { createdAt: 'ASC' },
     });
   }
 }

@@ -23,6 +23,9 @@ import {
   FolderSearch,
   Star,
   Clock,
+  Sparkles,
+  Search,
+  Mail,
 } from 'lucide-react';
 import { useState } from 'react';
 import SshSidebarSection from './ssh-sidebar-section';
@@ -74,6 +77,18 @@ const navItems: NavItem[] = [
         label: 'История просмотров',
         href: '/purchases/history',
         icon: <Clock size={16} />,
+        roles: ALL_ROLES,
+      },
+      {
+        label: 'Поисковые запросы',
+        href: '/purchases/search-terms',
+        icon: <Search size={16} />,
+        roles: ALL_ROLES,
+      },
+      {
+        label: 'Подготовленные письма',
+        href: '/purchases/letters',
+        icon: <Mail size={16} />,
         roles: ALL_ROLES,
       },
     ],

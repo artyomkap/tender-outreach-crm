@@ -27,6 +27,10 @@ class UserSettingsDto {
   @IsOptional()
   @IsString()
   aiPrompt?: string;
+
+  @IsOptional()
+  @IsString()
+  searchApiUrl?: string;
 }
 
 export class UpdateUserDto {

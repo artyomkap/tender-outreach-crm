@@ -88,6 +88,40 @@ export class PurchasesController {
     return this.purchasesService.getFileText(fileId);
   }
 
+  @Get('ai-results')
+  getUserAiResults(
+    @CurrentUser() user: User,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+  ) {
+    return this.purchasesService.getUserAiResults(user.id, page, limit);
+  }
+
+  @Get('ai-search-terms')
+  getUserSearchTerms(
+    @CurrentUser() user: User,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
+  ) {
+    return this.purchasesService.getUserSearchTerms(user.id, page, limit);
+  }
+
+  @Post('web-search/:searchTermId')
+  executeWebSearch(
+    @Param('searchTermId') searchTermId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.purchasesService.executeWebSearch(searchTermId, user);
+  }
+
+  @Get('web-search/:searchTermId/results')
+  getWebSearchResults(
+    @Param('searchTermId') searchTermId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.purchasesService.getWebSearchResults(searchTermId, user.id);
+  }
+
   @Post(':purchaseId/prepare')
   preparePurchase(
     @Param('purchaseId') purchaseId: string,

@@ -43,6 +43,7 @@ export class User {
     proxyUrl?: string;
     aiUrl?: string;
     aiPrompt?: string;
+    searchApiUrl?: string;
   } | null;
 
   @CreateDateColumn({ name: 'created_at' })
