@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import MagicPipeline from '@/components/magic-pipeline';
 
 const STAGE_LABELS: Record<number, string> = {
   1: 'Подача заявок',
@@ -207,9 +208,24 @@ export default function PurchaseDetailPage() {
                     </span>
                   )}
                 </div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">
-                  {formatPrice(purchase.maxPrice, purchase.currencyCode)}
-                </p>
+                <div className="flex flex-col items-end gap-2">
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                    {formatPrice(purchase.maxPrice, purchase.currencyCode)}
+                  </p>
+                  <MagicPipeline
+                    purchase={purchase}
+                    onComplete={() => {
+                      // Reload AI result
+                      api.get<PurchaseAiResult | null>(`/purchases/${purchase.id}/ai-result`)
+                        .then((r) => { if (r) setAiResult(r); })
+                        .catch(() => {});
+                      // Reload purchase to get updated parsedText on files
+                      api.get<Purchase>(`/purchases/${purchaseNumber}`)
+                        .then((p) => setPurchase(p))
+                        .catch(() => {});
+                    }}
+                  />
+                </div>
               </div>
 
               <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">

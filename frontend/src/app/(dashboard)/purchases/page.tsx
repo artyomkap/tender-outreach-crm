@@ -19,6 +19,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import Link from 'next/link';
+import MagicButtonCompact from '@/components/magic-button-compact';
 
 const STAGE_LABELS: Record<number, string> = {
   1: 'Подача заявок',
@@ -394,6 +395,7 @@ export default function PurchasesPage() {
                       {formatPrice(purchase.maxPrice, purchase.currencyCode)}
                     </p>
                     <div className="flex items-center gap-2">
+                      <MagicButtonCompact purchaseId={purchase.id} />
                       <button
                         onClick={() => handlePrepare(purchase.id)}
                         disabled={preparingId === purchase.id}

@@ -17,6 +17,7 @@ import {
   Mail,
 } from 'lucide-react';
 import Link from 'next/link';
+import MagicButtonCompact from '@/components/magic-button-compact';
 
 const STAGE_LABELS: Record<number, string> = {
   1: 'Подача заявок',
@@ -189,6 +190,10 @@ export default function FavoritesPage() {
                         {formatPrice(item.purchase.maxPrice, item.purchase.currencyCode)}
                       </p>
                       <div className="flex items-center gap-2">
+                        <MagicButtonCompact
+                          purchaseId={item.purchase.id}
+                          onComplete={fetchData}
+                        />
                         <button
                           onClick={() => handlePrepare(item.purchase.id)}
                           disabled={preparingId === item.purchase.id}
