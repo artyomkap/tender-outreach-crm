@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import Header from '@/components/header';
 import { api } from '@/lib/api';
 import { TouchApiInfo, TouchApiClient } from '@/types';
+import QRCode from 'qrcode';
 import {
   Smartphone,
   Plus,
@@ -30,11 +31,23 @@ const SOURCES = [
   { value: 'max', label: 'MAX' },
 ];
 
-function extractQrUrl(data: any): string | null {
+async function extractQrUrl(data: any): Promise<string | null> {
+  // Direct QR image (base64 or URL)
   const qr = data?.qr;
-  if (!qr || typeof qr !== 'string') return null;
-  if (qr.startsWith('http') || qr.startsWith('data:')) return qr;
-  return `data:image/png;base64,${qr}`;
+  if (qr && typeof qr === 'string') {
+    if (qr.startsWith('http') || qr.startsWith('data:')) return qr;
+    return `data:image/png;base64,${qr}`;
+  }
+  // Value string (e.g. WhatsApp) — generate QR code image from text
+  const value = data?.value;
+  if (value && typeof value === 'string') {
+    try {
+      return await QRCode.toDataURL(value, { width: 400, margin: 2 });
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 export default function InstancesPage() {
@@ -139,7 +152,7 @@ export default function InstancesPage() {
               login: client.login,
               source,
             });
-            const qrUrl = extractQrUrl(data);
+            const qrUrl = await extractQrUrl(data);
             setImageModal({ login: client.login, title: 'QR-код', url: qrUrl, loading: false });
           } catch {
             setImageModal({ login: client.login, title: 'QR-код', url: null, loading: false });
@@ -162,7 +175,7 @@ export default function InstancesPage() {
       setImageModal({ login, title: 'QR-код', url: null, loading: true });
       try {
         const data = await api.post<any>('/touch-api/get-qr', { login, source });
-        const qrUrl = extractQrUrl(data);
+        const qrUrl = await extractQrUrl(data);
         setImageModal({ login, title: 'QR-код', url: qrUrl, loading: false });
       } catch {
         setImageModal({ login, title: 'QR-код', url: null, loading: false });
@@ -216,7 +229,7 @@ export default function InstancesPage() {
           login: client.login,
           source,
         });
-        const qrUrl = extractQrUrl(data);
+        const qrUrl = await extractQrUrl(data);
         setImageModal({
           login: client.login,
           title: 'QR-код (сброс)',
@@ -299,26 +312,28 @@ export default function InstancesPage() {
                 {/* Summary + Actions */}
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-4">
-                    {info && (
+                    {info?.summary && (
                       <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
                         <span>
                           Всего:{' '}
                           <span className="font-medium text-gray-900 dark:text-gray-100">
-                            {info.summary.count}
+                            {info.summary.count ?? 0}
                           </span>
                         </span>
                         <span>
                           Активных:{' '}
                           <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                            {info.summary.active}
+                            {info.summary.active ?? 0}
                           </span>
                         </span>
-                        <span>
-                          Баланс:{' '}
-                          <span className="font-medium text-gray-900 dark:text-gray-100">
-                            {info.summary.payment.balance}
+                        {info.summary.payment != null && (
+                          <span>
+                            Баланс:{' '}
+                            <span className="font-medium text-gray-900 dark:text-gray-100">
+                              {info.summary.payment.balance}
+                            </span>
                           </span>
-                        </span>
+                        )}
                       </div>
                     )}
                   </div>

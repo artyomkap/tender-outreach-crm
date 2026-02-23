@@ -53,7 +53,7 @@ export interface TouchApiInfo {
     activated: number;
     demo: number;
     count: number;
-    payment: { mode: string; balance: number };
+    payment?: { mode: string; balance: number };
   };
   status: string;
 }
