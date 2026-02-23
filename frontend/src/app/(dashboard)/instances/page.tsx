@@ -19,7 +19,29 @@ import {
   Trash2,
   RotateCcw,
   Monitor,
+  Pencil,
+  Check,
 } from 'lucide-react';
+
+const NAMES_KEY = 'instance-names';
+
+function loadNames(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(NAMES_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function saveName(login: string, name: string) {
+  const names = loadNames();
+  if (name.trim()) {
+    names[login] = name.trim();
+  } else {
+    delete names[login];
+  }
+  localStorage.setItem(NAMES_KEY, JSON.stringify(names));
+}
 
 const SOURCES = [
   { value: 'whatsapp', label: 'WhatsApp' },
@@ -93,6 +115,21 @@ export default function InstancesPage() {
   const [deletingLogin, setDeletingLogin] = useState<string | null>(null);
   const [resettingLogin, setResettingLogin] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  // Instance names (localStorage)
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [editingName, setEditingName] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+
+  useEffect(() => {
+    setNames(loadNames());
+  }, []);
+
+  const handleSaveName = useCallback((login: string) => {
+    saveName(login, editValue);
+    setNames(loadNames());
+    setEditingName(null);
+  }, [editValue]);
 
   // Image modal (QR or screenshot)
   const [imageModal, setImageModal] = useState<{
@@ -510,15 +547,54 @@ export default function InstancesPage() {
                                   <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${srcColor}`}>
                                     {srcLabel}
                                   </span>
-                                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate font-mono">
-                                    {client.login}
-                                  </p>
-                                  {client.activated && (
+                                  {editingName === client.login ? (
+                                    <form
+                                      className="flex items-center gap-1 flex-1 min-w-0"
+                                      onSubmit={(e) => { e.preventDefault(); handleSaveName(client.login); }}
+                                    >
+                                      <input
+                                        autoFocus
+                                        value={editValue}
+                                        onChange={(e) => setEditValue(e.target.value)}
+                                        onBlur={() => handleSaveName(client.login)}
+                                        placeholder="Название инстанса"
+                                        className="flex-1 min-w-0 px-2 py-0.5 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-primary-500 focus:border-transparent"
+                                      />
+                                      <button type="submit" className="p-0.5 text-emerald-600 hover:text-emerald-700 dark:text-emerald-400">
+                                        <Check size={14} />
+                                      </button>
+                                    </form>
+                                  ) : (
+                                    <>
+                                      {names[client.login] ? (
+                                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                                          {names[client.login]}
+                                        </p>
+                                      ) : (
+                                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate font-mono">
+                                          {client.login}
+                                        </p>
+                                      )}
+                                      <button
+                                        onClick={() => { setEditingName(client.login); setEditValue(names[client.login] || ''); }}
+                                        title="Переименовать"
+                                        className="p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors shrink-0"
+                                      >
+                                        <Pencil size={12} />
+                                      </button>
+                                    </>
+                                  )}
+                                  {client.activated && editingName !== client.login && (
                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
                                       Activated
                                     </span>
                                   )}
                                 </div>
+                                {names[client.login] && editingName !== client.login && (
+                                  <p className="text-[11px] text-gray-400 dark:text-gray-500 font-mono truncate mt-0.5">
+                                    {client.login}
+                                  </p>
+                                )}
                                 <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 dark:text-gray-400">
                                   <span>
                                     Статус:{' '}
@@ -702,7 +778,7 @@ export default function InstancesPage() {
           >
             <div className="p-5">
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                Удалить инстанс?
+                Удалить инстанс{names[confirmDelete] ? ` «${names[confirmDelete]}»` : ''}?
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 font-mono mb-3 break-all">
                 {confirmDelete}
@@ -749,7 +825,7 @@ export default function InstancesPage() {
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
               <div>
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  {imageModal.title}
+                  {imageModal.title}{names[imageModal.login] ? ` — ${names[imageModal.login]}` : ''}
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 font-mono mt-0.5">
                   {imageModal.login}

@@ -157,14 +157,7 @@ export class PurchasesService {
           purchase = await this.purchaseRepository.save(purchase);
         }
 
-        if (!purchase.detailFetchedAt) {
-          await this.fetchAndStoreDetail(purchase);
-        }
-
-        purchase = await this.purchaseRepository.findOne({
-          where: { id: purchase.id },
-          relations: ['files'],
-        });
+        // Detail is fetched lazily when user opens the purchase page (getById)
 
         if (purchase) {
           results.push(purchase);
