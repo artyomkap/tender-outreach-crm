@@ -132,9 +132,11 @@ export interface FoundPurchase {
   isFavorite: boolean;
   createdAt: string;
   purchase: Purchase;
-  aiResult?: { id: string; subject: string | null; searchTerm: AiSearchTerm | null } | null;
+  aiResult?: { id: string; subject: string | null; body: string | null; searchTerm: AiSearchTerm | null } | null;
   savedDocsCount?: number;
   totalDocsCount?: number;
+  sitesCount?: number;
+  emailsCount?: number;
 }
 
 export interface AiSearchTerm {
@@ -179,6 +181,34 @@ export interface PreparedLetter {
   searchTerm: { id: string; term: string } | null;
   emails: string[];
   createdAt: string;
+}
+
+export interface PipelineDetail {
+  purchaseId: string;
+  purchaseNumber: string;
+  docs: {
+    parsed: number;
+    total: number;
+    files: { id: string; fileName: string | null; docDescription: string | null; parsed: boolean }[];
+  };
+  ai: {
+    done: boolean;
+    searchTerm: string | null;
+    subject: string | null;
+    body: string | null;
+  };
+  sites: {
+    count: number;
+    items: { id: string; url: string; title: string; emailsCount: number }[];
+  };
+  emails: {
+    count: number;
+    items: string[];
+  };
+  letters: {
+    ready: boolean;
+    emailsCount: number;
+  };
 }
 
 export interface SearchResponse {

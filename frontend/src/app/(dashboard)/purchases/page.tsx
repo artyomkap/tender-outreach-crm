@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import Header from '@/components/header';
 import { api } from '@/lib/api';
@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import MagicButtonCompact from '@/components/magic-button-compact';
+import PipelineStatusBar from '@/components/pipeline-status';
 
 const STAGE_LABELS: Record<number, string> = {
   1: 'Подача заявок',
@@ -55,6 +56,7 @@ export default function PurchasesPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [debugUrl, setDebugUrl] = useState('');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [pipelineCounts, setPipelineCounts] = useState<Record<string, any>>({});
 
   const [form, setForm] = useState({
     objectInfo: '',
@@ -91,6 +93,14 @@ export default function PurchasesPage() {
         const data = await api.get<SearchResponse>(`/purchases/search?${params.toString()}`);
         setResults(data.results);
         setDebugUrl(data.debugUrl);
+
+        // Fetch pipeline counts for all results
+        if (data.results.length > 0) {
+          const ids = data.results.map((p) => p.id).join(',');
+          api.get<Record<string, any>>(`/purchases/pipeline-counts?ids=${ids}`)
+            .then(setPipelineCounts)
+            .catch(() => {});
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Ошибка поиска');
         setResults([]);
@@ -100,6 +110,15 @@ export default function PurchasesPage() {
     },
     [form],
   );
+
+  const refreshPipelineCounts = useCallback(() => {
+    if (results.length > 0) {
+      const ids = results.map((p) => p.id).join(',');
+      api.get<Record<string, any>>(`/purchases/pipeline-counts?ids=${ids}`)
+        .then(setPipelineCounts)
+        .catch(() => {});
+    }
+  }, [results]);
 
   const [preparingId, setPreparingId] = useState<string | null>(null);
 
@@ -389,13 +408,25 @@ export default function PurchasesPage() {
                         <span className="truncate max-w-xs">{purchase.customers[0]}</span>
                       )}
                     </div>
+                    {pipelineCounts[purchase.id] && (
+                      <div className="mt-2">
+                        <PipelineStatusBar
+                          purchaseId={purchase.id}
+                          savedDocsCount={pipelineCounts[purchase.id].savedDocsCount}
+                          totalDocsCount={pipelineCounts[purchase.id].totalDocsCount}
+                          aiResult={pipelineCounts[purchase.id].aiResult}
+                          sitesCount={pipelineCounts[purchase.id].sitesCount}
+                          emailsCount={pipelineCounts[purchase.id].emailsCount}
+                        />
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col items-end gap-2 shrink-0">
                     <p className="text-lg font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
                       {formatPrice(purchase.maxPrice, purchase.currencyCode)}
                     </p>
                     <div className="flex items-center gap-2">
-                      <MagicButtonCompact purchaseId={purchase.id} />
+                      <MagicButtonCompact purchaseId={purchase.id} onComplete={refreshPipelineCounts} />
                       <button
                         onClick={() => handlePrepare(purchase.id)}
                         disabled={preparingId === purchase.id}

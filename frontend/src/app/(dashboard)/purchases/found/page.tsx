@@ -14,11 +14,10 @@ import {
   Star,
   Sparkles,
   Loader2,
-  FileText,
-  Mail,
 } from 'lucide-react';
 import Link from 'next/link';
 import MagicButtonCompact from '@/components/magic-button-compact';
+import PipelineStatusBar from '@/components/pipeline-status';
 
 const STAGE_LABELS: Record<number, string> = {
   1: 'Подача заявок',
@@ -180,23 +179,15 @@ export default function FoundPurchasesPage() {
                           <span>Опубликовано: {formatDate(item.purchase.publishedAt)}</span>
                         )}
                       </div>
-                      <div className="flex flex-wrap items-center gap-2 mt-2">
-                        {item.totalDocsCount !== undefined && item.totalDocsCount > 0 && (
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                            item.savedDocsCount && item.savedDocsCount > 0
-                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                              : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
-                          }`}>
-                            <FileText size={12} />
-                            {item.savedDocsCount || 0}/{item.totalDocsCount} сохр.
-                          </span>
-                        )}
-                        {item.aiResult && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">
-                            <Mail size={12} />
-                            {item.aiResult.subject || 'Письмо готово'}
-                          </span>
-                        )}
+                      <div className="mt-2">
+                        <PipelineStatusBar
+                          purchaseId={item.purchase.id}
+                          savedDocsCount={item.savedDocsCount}
+                          totalDocsCount={item.totalDocsCount}
+                          aiResult={item.aiResult}
+                          sitesCount={item.sitesCount}
+                          emailsCount={item.emailsCount}
+                        />
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-2 shrink-0">

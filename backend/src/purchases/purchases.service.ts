@@ -271,22 +271,50 @@ export class PurchasesService {
     const aiResults = await this.aiResultRepository.find({
       where: purchaseIds.map((pid) => ({ userId, purchaseId: pid })),
       relations: ['searchTerm'],
-      select: ['id', 'purchaseId', 'subject', 'searchTermId'],
     });
 
     const aiMap = new Map(aiResults.map((r) => [r.purchaseId, r]));
 
-    return items.map((item) => {
+    const enriched: any[] = [];
+    for (const item of items) {
       const ai = aiMap.get(item.purchaseId);
       const savedDocsCount = item.purchase?.files?.filter((f) => f.parsedText)?.length || 0;
       const totalDocsCount = item.purchase?.files?.length || 0;
-      return {
+
+      let sitesCount = 0;
+      let emailsCount = 0;
+
+      if (ai?.searchTerm) {
+        const wsrtLinks = await this.webSearchResultSearchTermRepository.find({
+          where: { searchTermId: ai.searchTerm.id },
+          relations: ['webSearchResult', 'webSearchResult.emailLinks', 'webSearchResult.emailLinks.parsedEmail'],
+        });
+
+        const userLinks = wsrtLinks.filter(
+          (l) => l.webSearchResult && l.webSearchResult.userId === userId,
+        );
+        sitesCount = userLinks.length;
+
+        const emailsSet = new Set<string>();
+        for (const l of userLinks) {
+          for (const el of (l.webSearchResult.emailLinks || [])) {
+            if (el.parsedEmail) emailsSet.add(el.parsedEmail.email);
+          }
+        }
+        emailsCount = emailsSet.size;
+      }
+
+      enriched.push({
         ...item,
-        aiResult: ai ? { id: ai.id, subject: ai.subject, searchTerm: ai.searchTerm } : null,
+        aiResult: ai ? { id: ai.id, subject: ai.subject, body: ai.body, searchTerm: ai.searchTerm } : null,
         savedDocsCount,
         totalDocsCount,
-      };
-    });
+        sitesCount,
+        emailsCount,
+      });
+    }
+
+    return enriched;
   }
 
   async toggleFavorite(
@@ -1068,5 +1096,156 @@ export class PurchasesService {
     const paged = letters.slice(skip, skip + limit);
 
     return { data: paged, total };
+  }
+
+  // --- Pipeline detail for a purchase (for modal) ---
+
+  async getPurchasePipelineDetail(
+    purchaseId: string,
+    userId: string,
+  ): Promise<any> {
+    const purchase = await this.purchaseRepository.findOne({
+      where: { id: purchaseId },
+      relations: ['files'],
+    });
+
+    if (!purchase) {
+      throw new NotFoundException('Закупка не найдена');
+    }
+
+    const files = (purchase.files || []).map((f) => ({
+      id: f.id,
+      fileName: f.fileName,
+      docDescription: f.docDescription,
+      parsed: !!f.parsedText,
+    }));
+
+    const aiResult = await this.aiResultRepository.findOne({
+      where: { userId, purchaseId },
+      relations: ['searchTerm'],
+    });
+
+    let sites: any[] = [];
+    let emails: string[] = [];
+
+    if (aiResult?.searchTerm) {
+      const wsrtLinks = await this.webSearchResultSearchTermRepository.find({
+        where: { searchTermId: aiResult.searchTerm.id },
+        relations: ['webSearchResult', 'webSearchResult.emailLinks', 'webSearchResult.emailLinks.parsedEmail'],
+      });
+
+      const userLinks = wsrtLinks.filter(
+        (l) => l.webSearchResult && l.webSearchResult.userId === userId,
+      );
+
+      const emailsSet = new Set<string>();
+      sites = userLinks.map((l) => {
+        const siteEmails = (l.webSearchResult.emailLinks || [])
+          .filter((el) => el.parsedEmail)
+          .map((el) => el.parsedEmail.email);
+        siteEmails.forEach((e) => emailsSet.add(e));
+        return {
+          id: l.webSearchResult.id,
+          url: l.webSearchResult.url,
+          title: l.webSearchResult.title,
+          emailsCount: siteEmails.length,
+        };
+      });
+      emails = Array.from(emailsSet).sort();
+    }
+
+    return {
+      purchaseId: purchase.id,
+      purchaseNumber: purchase.purchaseNumber,
+      docs: {
+        parsed: files.filter((f) => f.parsed).length,
+        total: files.length,
+        files,
+      },
+      ai: aiResult
+        ? {
+            done: true,
+            searchTerm: aiResult.searchTerm?.term || null,
+            subject: aiResult.subject,
+            body: aiResult.body,
+          }
+        : { done: false, searchTerm: null, subject: null, body: null },
+      sites: {
+        count: sites.length,
+        items: sites,
+      },
+      emails: {
+        count: emails.length,
+        items: emails,
+      },
+      letters: {
+        ready: !!(aiResult?.subject && emails.length > 0),
+        emailsCount: emails.length,
+      },
+    };
+  }
+
+  // --- Batch pipeline counts for multiple purchases ---
+
+  async getBatchPipelineCounts(
+    purchaseIds: string[],
+    userId: string,
+  ): Promise<Record<string, any>> {
+    if (purchaseIds.length === 0) return {};
+
+    const aiResults = await this.aiResultRepository.find({
+      where: purchaseIds.map((pid) => ({ userId, purchaseId: pid })),
+      relations: ['searchTerm'],
+    });
+    const aiMap = new Map(aiResults.map((r) => [r.purchaseId, r]));
+
+    const purchases = await this.purchaseRepository.find({
+      where: purchaseIds.map((id) => ({ id })),
+      relations: ['files'],
+    });
+    const purchaseMap = new Map(purchases.map((p) => [p.id, p]));
+
+    const result: Record<string, any> = {};
+
+    for (const pid of purchaseIds) {
+      const purchase = purchaseMap.get(pid);
+      const ai = aiMap.get(pid);
+      const files = purchase?.files || [];
+      const savedDocsCount = files.filter((f) => f.parsedText).length;
+      const totalDocsCount = files.length;
+
+      let sitesCount = 0;
+      let emailsCount = 0;
+
+      if (ai?.searchTerm) {
+        const wsrtLinks = await this.webSearchResultSearchTermRepository.find({
+          where: { searchTermId: ai.searchTerm.id },
+          relations: ['webSearchResult', 'webSearchResult.emailLinks', 'webSearchResult.emailLinks.parsedEmail'],
+        });
+
+        const userLinks = wsrtLinks.filter(
+          (l) => l.webSearchResult && l.webSearchResult.userId === userId,
+        );
+        sitesCount = userLinks.length;
+
+        const emailsSet = new Set<string>();
+        for (const l of userLinks) {
+          for (const el of (l.webSearchResult.emailLinks || [])) {
+            if (el.parsedEmail) emailsSet.add(el.parsedEmail.email);
+          }
+        }
+        emailsCount = emailsSet.size;
+      }
+
+      result[pid] = {
+        savedDocsCount,
+        totalDocsCount,
+        aiResult: ai ? { id: ai.id, subject: ai.subject, body: ai.body, searchTerm: ai.searchTerm ? { id: ai.searchTerm.id, term: ai.searchTerm.term } : null } : null,
+        sitesCount,
+        emailsCount,
+      };
+    }
+
+    return result;
   }
 }

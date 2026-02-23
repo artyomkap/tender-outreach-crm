@@ -124,6 +124,15 @@ export class PurchasesController {
     return this.purchasesService.getPreparedLetters(user.id, page, limit);
   }
 
+  @Get('pipeline-counts')
+  getBatchPipelineCounts(
+    @CurrentUser() user: User,
+    @Query('ids') ids: string,
+  ) {
+    const purchaseIds = (ids || '').split(',').filter(Boolean);
+    return this.purchasesService.getBatchPipelineCounts(purchaseIds, user.id);
+  }
+
   @Post('web-search/:searchTermId')
   executeWebSearch(
     @Param('searchTermId') searchTermId: string,
@@ -162,6 +171,14 @@ export class PurchasesController {
     @CurrentUser() user: User,
   ) {
     return this.purchasesService.getAiResult(purchaseId, user.id);
+  }
+
+  @Get(':purchaseId/pipeline')
+  getPipelineDetail(
+    @Param('purchaseId') purchaseId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.purchasesService.getPurchasePipelineDetail(purchaseId, user.id);
   }
 
   @Get(':purchaseNumber')
