@@ -186,9 +186,24 @@ export default function MailPage() {
                         {msg.subject}
                       </p>
                     )}
-                    <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words font-sans leading-relaxed">
-                      {msg.bodyText}
-                    </pre>
+                    {msg.bodyHtml ? (
+                      <iframe
+                        srcDoc={msg.bodyHtml}
+                        sandbox="allow-same-origin"
+                        className="w-full border-0 min-h-[100px]"
+                        style={{ colorScheme: 'light' }}
+                        onLoad={(e) => {
+                          const iframe = e.target as HTMLIFrameElement;
+                          if (iframe.contentDocument?.body) {
+                            iframe.style.height = iframe.contentDocument.body.scrollHeight + 20 + 'px';
+                          }
+                        }}
+                      />
+                    ) : (
+                      <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words font-sans leading-relaxed">
+                        {msg.bodyText}
+                      </pre>
+                    )}
                   </div>
                 ))}
               </div>

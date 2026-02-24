@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EmailMessage } from './entities/email-message.entity';
 import * as nodemailer from 'nodemailer';
+import { simpleParser } from 'mailparser';
 
 interface SmtpSettings {
   smtpHost?: string;
@@ -131,28 +132,52 @@ export class EmailsService {
 
         for await (const msg of client.fetch(`${startSeq}:*`, {
           envelope: true,
-          source: false,
-          bodyStructure: true,
-          bodyParts: ['1'],
+          source: true,
         })) {
           const envelope = msg.envelope;
           if (!envelope) continue;
 
           const messageId = envelope.messageId || null;
 
-          // Skip if already stored
+          // Check if already stored
           if (messageId) {
             const existing = await this.emailMessageRepository.findOne({
               where: { userId, messageId },
             });
-            if (existing) continue;
+            if (existing) {
+              // Re-parse old messages that have no bodyHtml
+              if (existing.bodyHtml === null && msg.source) {
+                try {
+                  const parsed = await simpleParser(msg.source);
+                  existing.bodyText = parsed.text || existing.bodyText;
+                  existing.bodyHtml = parsed.html || null;
+                  await this.emailMessageRepository.save(existing);
+                } catch {
+                  // ignore re-parse errors
+                }
+              }
+              continue;
+            }
           }
 
           const fromAddr =
             envelope.from?.[0]?.address?.toLowerCase() || 'unknown';
           const subject = envelope.subject || '';
-          const bodyPart = msg.bodyParts?.get('1');
-          const bodyText = bodyPart ? bodyPart.toString('utf-8') : '';
+
+          // Parse the full MIME source to extract text and HTML bodies
+          let bodyText = '';
+          let bodyHtml: string | null = null;
+
+          if (msg.source) {
+            try {
+              const parsed = await simpleParser(msg.source);
+              bodyText = parsed.text || '';
+              bodyHtml = parsed.html || null;
+            } catch (parseErr: any) {
+              this.logger.warn(`Failed to parse email MIME: ${parseErr.message}`);
+              bodyText = msg.source.toString('utf-8');
+            }
+          }
 
           const emailMsg = this.emailMessageRepository.create({
             userId,
@@ -160,6 +185,7 @@ export class EmailsService {
             contactEmail: fromAddr,
             subject,
             bodyText,
+            bodyHtml,
             messageId,
             inReplyTo: envelope.inReplyTo || null,
             isRead: false,
