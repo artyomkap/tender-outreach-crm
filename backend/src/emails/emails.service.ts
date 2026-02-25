@@ -64,7 +64,8 @@ export class EmailsService {
       connectionTimeout: 15000,
       greetingTimeout: 15000,
       socketTimeout: 20000,
-    });
+      dnsOptions: { family: 4 },
+    } as any);
 
     const from = emailFrom || smtpUser;
 
