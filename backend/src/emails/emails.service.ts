@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EmailMessage } from './entities/email-message.entity';
 import * as nodemailer from 'nodemailer';
-import { simpleParser } from 'mailparser';
 
 interface SmtpSettings {
   smtpHost?: string;
@@ -57,6 +56,9 @@ export class EmailsService {
       secure: smtpSecure ?? false,
       auth: { user: smtpUser, pass: smtpPass },
       tls: { rejectUnauthorized: false },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
     });
 
     const from = emailFrom || smtpUser;
@@ -107,6 +109,7 @@ export class EmailsService {
     // so we use a simple fetch-based approach with the IMAP protocol
     // For now, use a basic TCP connection approach
     const { ImapFlow } = await this.loadImapFlow();
+    const simpleParser = await this.loadSimpleParser();
 
     const client = new ImapFlow({
       host: imapHost,
@@ -213,6 +216,17 @@ export class EmailsService {
     } catch {
       throw new BadRequestException(
         'IMAP модуль не установлен. Установите: npm install imapflow',
+      );
+    }
+  }
+
+  private async loadSimpleParser(): Promise<(source: any) => Promise<any>> {
+    try {
+      const { simpleParser } = await import('mailparser');
+      return simpleParser;
+    } catch {
+      throw new BadRequestException(
+        'mailparser модуль не установлен. Установите: npm install mailparser',
       );
     }
   }
