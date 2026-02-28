@@ -4,6 +4,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { SshServersModule } from './ssh-servers/ssh-servers.module';
 import { PurchasesModule } from './purchases/purchases.module';
+import { ProzorroModule } from './prozorro/prozorro.module';
 import { TouchApiModule } from './touch-api/touch-api.module';
 import { EmailsModule } from './emails/emails.module';
 
@@ -29,6 +30,7 @@ import { EmailsModule } from './emails/emails.module';
     UsersModule,
     SshServersModule,
     PurchasesModule,
+    ProzorroModule,
     TouchApiModule,
     EmailsModule,
   ],

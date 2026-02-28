@@ -286,3 +286,65 @@ export interface EmailMessage {
   isRead: boolean;
   createdAt: string;
 }
+
+// --- Prozorro (Ukraine) ---
+
+export interface ProzorroTender {
+  id: string;
+  prozorroId: string;
+  tenderNumber: string;
+  title: string;
+  description: string | null;
+  status: string | null;
+  amount: number | null;
+  currency: string | null;
+  procuringEntityName: string | null;
+  procuringEntityId: string | null;
+  procurementMethodType: string | null;
+  rawData: Record<string, unknown> | null;
+  detailFetchedAt: string | null;
+  tenderPeriodEnd: string | null;
+  createdAt: string;
+  docs?: ProzorroTenderDoc[];
+}
+
+export interface ProzorroTenderDoc {
+  id: string;
+  documentId: string;
+  title: string;
+  format: string | null;
+  url: string;
+  documentType: string | null;
+  parsedText: string | null;
+}
+
+export interface ProzorroSearchResponse {
+  results: ProzorroTender[];
+  scannedCount: number;
+}
+
+export interface ProzorroOutreachItem {
+  id: string;
+  searchQuery: string | null;
+  subject: string | null;
+  body: string | null;
+  createdAt: string;
+  tender: { id: string; prozorroId: string; tenderNumber: string; title: string } | null;
+  webResults: {
+    id: string;
+    url: string;
+    title: string;
+    snippet: string;
+    favicon: string;
+    parsedEmails: string[];
+  }[];
+  emails: string[];
+}
+
+export interface ProzorroPreparedLetter {
+  searchQuery: string;
+  subject: string;
+  body: string;
+  tender: { id: string; tenderNumber: string; title: string } | null;
+  emails: string[];
+}

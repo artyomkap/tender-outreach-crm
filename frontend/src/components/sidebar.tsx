@@ -32,6 +32,7 @@ import {
   Inbox,
   Send,
   MessageCircle,
+  Globe2,
 } from 'lucide-react';
 import { useState } from 'react';
 import SshSidebarSection from './ssh-sidebar-section';
@@ -113,6 +114,20 @@ const navItems: NavItem[] = [
         label: 'Почта',
         href: '/purchases/mail',
         icon: <Inbox size={16} />,
+        roles: ALL_ROLES,
+      },
+    ],
+  },
+  {
+    label: 'Закупки Украина',
+    href: '/prozorro',
+    icon: <Globe2 size={20} />,
+    roles: ALL_ROLES,
+    children: [
+      {
+        label: 'Воронка рассылки',
+        href: '/prozorro/outreach',
+        icon: <Send size={16} />,
         roles: ALL_ROLES,
       },
     ],
