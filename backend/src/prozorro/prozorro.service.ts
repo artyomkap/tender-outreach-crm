@@ -74,8 +74,12 @@ export class ProzorroService {
         if (query && !title.includes(query)) continue;
         if (statusFilter && item.status !== statusFilter) continue;
 
-        const tender = await this.upsertTenderFromFeed(item);
-        results.push(tender);
+        try {
+          const tender = await this.upsertTenderFromFeed(item);
+          results.push(tender);
+        } catch (error: any) {
+          this.logger.error(`Failed to upsert tender ${item.id}: ${error.message}`);
+        }
       }
 
       const nextUri = data.next_page?.uri;

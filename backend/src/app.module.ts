@@ -25,6 +25,9 @@ import { EmailsModule } from './emails/emails.module';
       ssl: process.env.DATABASE_URL
         ? { rejectUnauthorized: false }
         : false,
+      connectTimeoutMS: 10000,
+      retryAttempts: 3,
+      retryDelay: 3000,
     }),
     AuthModule,
     UsersModule,
