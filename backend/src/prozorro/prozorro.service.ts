@@ -623,4 +623,85 @@ export class ProzorroService {
   async removeBlacklist(userId: string, email: string): Promise<void> {
     await this.blacklistRepo.delete({ userId, email: email.toLowerCase().trim() });
   }
+
+  // ─── Pipeline detail ─────────────────────────────────────
+
+  async getPipelineDetail(tenderId: string, userId: string): Promise<any> {
+    const tender = await this.tenderRepo.findOne({
+      where: { id: tenderId },
+      relations: ['docs'],
+    });
+    if (!tender) throw new NotFoundException('Тендер не найден');
+
+    const docs = tender.docs || [];
+    const parsedDocs = docs.filter((d) => d.parsedText);
+
+    // AI result
+    const aiResult = await this.aiResultRepo.findOne({
+      where: { userId, tenderId: tender.id },
+    });
+
+    // Web results & emails
+    let siteItems: { id: string; url: string; title: string; emailsCount: number }[] = [];
+    let allEmails: string[] = [];
+
+    if (aiResult?.searchQuery) {
+      const webResults = await this.webResultRepo.find({
+        where: { userId, searchQuery: aiResult.searchQuery },
+      });
+
+      const emailSet = new Set<string>();
+      siteItems = webResults.map((wr) => {
+        const emails = wr.parsedEmails || [];
+        for (const e of emails) emailSet.add(e);
+        return {
+          id: wr.id,
+          url: wr.url,
+          title: wr.title,
+          emailsCount: emails.length,
+        };
+      });
+      allEmails = [...emailSet].sort();
+    }
+
+    // Blacklist filter
+    const blacklisted = new Set(
+      (await this.blacklistRepo.find({ where: { userId } })).map((b) => b.email),
+    );
+    const filteredEmails = allEmails.filter((e) => !blacklisted.has(e));
+
+    return {
+      tenderId: tender.id,
+      prozorroId: tender.prozorroId,
+      tenderNumber: tender.tenderNumber,
+      docs: {
+        parsed: parsedDocs.length,
+        total: docs.length,
+        files: docs.map((d) => ({
+          id: d.id,
+          title: d.title,
+          documentType: d.documentType,
+          parsed: !!d.parsedText,
+        })),
+      },
+      ai: {
+        done: !!aiResult,
+        searchQuery: aiResult?.searchQuery || null,
+        subject: aiResult?.subject || null,
+        body: aiResult?.body || null,
+      },
+      sites: {
+        count: siteItems.length,
+        items: siteItems,
+      },
+      emails: {
+        count: filteredEmails.length,
+        items: filteredEmails,
+      },
+      letters: {
+        ready: !!(aiResult?.subject && filteredEmails.length > 0),
+        emailsCount: filteredEmails.length,
+      },
+    };
+  }
 }

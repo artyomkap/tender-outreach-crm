@@ -368,3 +368,32 @@ export interface ProzorroWebResult {
   favicon: string;
   parsedEmails: string[];
 }
+
+export interface ProzorroPipelineDetail {
+  tenderId: string;
+  prozorroId: string;
+  tenderNumber: string;
+  docs: {
+    parsed: number;
+    total: number;
+    files: { id: string; title: string; documentType: string | null; parsed: boolean }[];
+  };
+  ai: {
+    done: boolean;
+    searchQuery: string | null;
+    subject: string | null;
+    body: string | null;
+  };
+  sites: {
+    count: number;
+    items: { id: string; url: string; title: string; emailsCount: number }[];
+  };
+  emails: {
+    count: number;
+    items: string[];
+  };
+  letters: {
+    ready: boolean;
+    emailsCount: number;
+  };
+}

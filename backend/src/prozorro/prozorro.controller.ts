@@ -27,6 +27,14 @@ export class ProzorroController {
     return this.prozorroService.search(dto);
   }
 
+  @Get('tender/:tenderId/pipeline')
+  getPipelineDetail(
+    @Param('tenderId') tenderId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.prozorroService.getPipelineDetail(tenderId, user.id);
+  }
+
   @Get('tender/:prozorroId')
   getTender(@Param('prozorroId') prozorroId: string) {
     return this.prozorroService.getTender(prozorroId);

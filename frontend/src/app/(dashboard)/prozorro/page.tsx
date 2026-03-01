@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import ProzorroMagicButton from '@/components/prozorro-magic-button';
+import ProzorroPipelineStatus from '@/components/prozorro-pipeline-status';
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: '', label: 'Все статусы' },
@@ -242,6 +243,9 @@ export default function ProzorroPage() {
                     />
                   </div>
                 </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                <ProzorroPipelineStatus tenderId={tender.id} />
               </div>
             </div>
           ))}
