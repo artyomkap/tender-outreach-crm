@@ -66,6 +66,7 @@ export default function OutreachInboxPage() {
     try {
       const result = await api.post<{ checked: number; newReplies: number; errors: string[] }>(
         '/outreach/inbox/check-replies',
+        {},
       );
       if (result.newReplies > 0) {
         setCheckResult(`Найдено новых ответов: ${result.newReplies}`);
