@@ -23,6 +23,7 @@ export class AddOutreachTables1708000000020 implements MigrationInterface {
         "status" varchar(20) DEFAULT 'active',
         "last_error" text,
         "signature" text,
+        "smtp_relay_url" varchar,
         "created_at" timestamp DEFAULT now(),
         "updated_at" timestamp DEFAULT now()
       )

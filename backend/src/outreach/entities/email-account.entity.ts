@@ -69,6 +69,9 @@ export class OutreachEmailAccount {
   @Column({ type: 'text', nullable: true })
   signature: string | null;
 
+  @Column({ name: 'smtp_relay_url', type: 'varchar', nullable: true })
+  smtpRelayUrl: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

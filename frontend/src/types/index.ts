@@ -420,6 +420,7 @@ export interface OutreachEmailAccount {
   status: 'active' | 'paused' | 'error';
   lastError: string | null;
   signature: string | null;
+  smtpRelayUrl: string | null;
   createdAt: string;
   updatedAt: string;
 }

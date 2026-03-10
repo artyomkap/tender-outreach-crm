@@ -55,6 +55,7 @@ export class OutreachService {
       imapPass?: string;
       dailyLimit?: number;
       signature?: string;
+      smtpRelayUrl?: string;
     },
   ): Promise<OutreachEmailAccount> {
     const account = this.emailAccountRepo.create({
@@ -71,6 +72,7 @@ export class OutreachService {
       imapPass: data.imapPass || null,
       dailyLimit: data.dailyLimit || 50,
       signature: data.signature || null,
+      smtpRelayUrl: data.smtpRelayUrl || null,
     });
     return this.emailAccountRepo.save(account);
   }
@@ -93,6 +95,7 @@ export class OutreachService {
       isWarmupEnabled: boolean;
       status: 'active' | 'paused' | 'error';
       signature: string;
+      smtpRelayUrl: string;
     }>,
   ): Promise<OutreachEmailAccount> {
     await this.emailAccountRepo.update({ id, userId }, data);
@@ -110,14 +113,42 @@ export class OutreachService {
     if (!account) throw new NotFoundException('Аккаунт не найден');
 
     try {
-      const transporter = nodemailer.createTransport({
-        host: account.smtpHost,
-        port: account.smtpPort,
-        secure: account.smtpPort === 465,
-        auth: { user: account.smtpUser, pass: account.smtpPass },
-        connectionTimeout: 10000,
-      });
-      await transporter.verify();
+      if (account.smtpRelayUrl) {
+        // Test via relay: send a test ping
+        const response = await fetch(account.smtpRelayUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Relay-Secret': process.env.SMTP_RELAY_SECRET || '',
+          },
+          body: JSON.stringify({
+            smtpHost: account.smtpHost,
+            smtpPort: account.smtpPort,
+            smtpUser: account.smtpUser,
+            smtpPass: account.smtpPass,
+            smtpSecure: account.smtpPort === 465,
+            emailFrom: account.email,
+            to: account.email,
+            subject: 'Coldy Test — проверка подключения',
+            body: 'Тестовое письмо. Подключение работает.',
+          }),
+          signal: AbortSignal.timeout(30000),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.ok) {
+          throw new Error(result.error || `Relay returned ${response.status}`);
+        }
+      } else {
+        const transporter = nodemailer.createTransport({
+          host: account.smtpHost,
+          port: account.smtpPort,
+          secure: account.smtpPort === 465,
+          auth: { user: account.smtpUser, pass: account.smtpPass },
+          connectionTimeout: 10000,
+          tls: { rejectUnauthorized: false, servername: account.smtpHost },
+        });
+        await transporter.verify();
+      }
       await this.emailAccountRepo.update(id, { status: 'active', lastError: null });
       return { success: true };
     } catch (err: any) {
@@ -522,22 +553,54 @@ export class OutreachService {
     subject: string,
     body: string,
   ): Promise<void> {
-    const transporter = nodemailer.createTransport({
-      host: account.smtpHost,
-      port: account.smtpPort,
-      secure: account.smtpPort === 465,
-      auth: { user: account.smtpUser, pass: account.smtpPass },
-      connectionTimeout: 15000,
-    });
+    const fullBody = body + (account.signature ? `\n\n${account.signature}` : '');
+    const emailFrom = account.senderName
+      ? `"${account.senderName}" <${account.email}>`
+      : account.email;
 
-    await transporter.sendMail({
-      from: account.senderName
-        ? `"${account.senderName}" <${account.email}>`
-        : account.email,
-      to,
-      subject,
-      text: body + (account.signature ? `\n\n${account.signature}` : ''),
-    });
+    if (account.smtpRelayUrl) {
+      // Send via relay
+      const response = await fetch(account.smtpRelayUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Relay-Secret': process.env.SMTP_RELAY_SECRET || '',
+        },
+        body: JSON.stringify({
+          smtpHost: account.smtpHost,
+          smtpPort: account.smtpPort,
+          smtpUser: account.smtpUser,
+          smtpPass: account.smtpPass,
+          smtpSecure: account.smtpPort === 465,
+          emailFrom: account.email,
+          to,
+          subject,
+          body: fullBody,
+        }),
+        signal: AbortSignal.timeout(30000),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || `Relay returned ${response.status}`);
+      }
+    } else {
+      // Direct SMTP
+      const transporter = nodemailer.createTransport({
+        host: account.smtpHost,
+        port: account.smtpPort,
+        secure: account.smtpPort === 465,
+        auth: { user: account.smtpUser, pass: account.smtpPass },
+        connectionTimeout: 15000,
+        tls: { rejectUnauthorized: false, servername: account.smtpHost },
+      });
+
+      await transporter.sendMail({
+        from: emailFrom,
+        to,
+        subject,
+        text: fullBody,
+      });
+    }
   }
 
   // ===================== CAMPAIGN EMAILS / INBOX =====================

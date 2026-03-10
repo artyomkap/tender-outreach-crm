@@ -43,6 +43,7 @@ export default function OutreachAccountsPage() {
     imapPass: '',
     dailyLimit: '50',
     signature: '',
+    smtpRelayUrl: '',
   });
 
   const fetchAccounts = useCallback(async () => {
@@ -77,10 +78,11 @@ export default function OutreachAccountsPage() {
         imapPass: form.imapPass || undefined,
         dailyLimit: parseInt(form.dailyLimit),
         signature: form.signature || undefined,
+        smtpRelayUrl: form.smtpRelayUrl || undefined,
       });
       setAccounts((prev) => [created, ...prev]);
       setShowForm(false);
-      setForm({ email: '', senderName: '', smtpHost: '', smtpPort: '587', smtpUser: '', smtpPass: '', imapHost: '', imapPort: '993', imapUser: '', imapPass: '', dailyLimit: '50', signature: '' });
+      setForm({ email: '', senderName: '', smtpHost: '', smtpPort: '587', smtpUser: '', smtpPass: '', imapHost: '', imapPort: '993', imapUser: '', imapPass: '', dailyLimit: '50', signature: '', smtpRelayUrl: '' });
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ошибка');
     } finally {
@@ -254,6 +256,21 @@ export default function OutreachAccountsPage() {
             </div>
             <div className="mt-4">
               <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                SMTP Relay URL (необязательно)
+              </label>
+              <input
+                type="url"
+                value={form.smtpRelayUrl}
+                onChange={(e) => setForm((p) => ({ ...p, smtpRelayUrl: e.target.value }))}
+                className="input-field"
+                placeholder="https://my-vps.com/smtp-relay.php"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Если указан — письма отправляются через этот URL вместо прямого SMTP
+              </p>
+            </div>
+            <div className="mt-4">
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Подпись
               </label>
               <textarea
@@ -325,6 +342,9 @@ export default function OutreachAccountsPage() {
                         <span>{account.smtpHost}:{account.smtpPort}</span>
                         <span>Лимит: {account.dailyLimit}/день</span>
                         <span>Отправлено сегодня: {account.sentToday}</span>
+                        {account.smtpRelayUrl && (
+                          <span className="text-teal-600 dark:text-teal-400">via Relay</span>
+                        )}
                       </div>
                       {account.lastError && (
                         <p className="text-xs text-red-500 mt-1 truncate">{account.lastError}</p>

@@ -55,6 +55,7 @@ export class OutreachController {
       imapPass?: string;
       dailyLimit?: number;
       signature?: string;
+      smtpRelayUrl?: string;
     },
   ) {
     return this.outreachService.createEmailAccount(user.id, body);
