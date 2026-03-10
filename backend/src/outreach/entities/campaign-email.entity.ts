@@ -57,6 +57,9 @@ export class OutreachCampaignEmail {
   @Column({ name: 'replied_at', type: 'timestamp', nullable: true })
   repliedAt: Date | null;
 
+  @Column({ name: 'message_id', type: 'varchar', nullable: true })
+  messageId: string | null;
+
   @Column({ name: 'error_message', type: 'text', nullable: true })
   errorMessage: string | null;
 

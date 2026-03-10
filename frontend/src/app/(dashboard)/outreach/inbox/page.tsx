@@ -15,6 +15,7 @@ import {
   Mail,
   Clock,
   Send,
+  RefreshCw,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -36,6 +37,8 @@ export default function OutreachInboxPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [checkResult, setCheckResult] = useState<string | null>(null);
   const limit = 20;
 
   const fetchInbox = useCallback(async () => {
@@ -57,6 +60,29 @@ export default function OutreachInboxPage() {
     fetchInbox();
   }, [fetchInbox]);
 
+  const handleCheckReplies = async () => {
+    setChecking(true);
+    setCheckResult(null);
+    try {
+      const result = await api.post<{ checked: number; newReplies: number; errors: string[] }>(
+        '/outreach/inbox/check-replies',
+      );
+      if (result.newReplies > 0) {
+        setCheckResult(`Найдено новых ответов: ${result.newReplies}`);
+        fetchInbox();
+      } else if (result.errors.length > 0 && result.checked === 0) {
+        setCheckResult(result.errors[0]);
+      } else {
+        setCheckResult('Новых ответов не найдено');
+      }
+    } catch {
+      setCheckResult('Ошибка при проверке почты');
+    } finally {
+      setChecking(false);
+      setTimeout(() => setCheckResult(null), 5000);
+    }
+  };
+
   const totalPages = Math.ceil(total / limit);
 
   if (!user) return null;
@@ -72,9 +98,22 @@ export default function OutreachInboxPage() {
           >
             <ArrowLeft size={16} /> Назад
           </Link>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Всего ответов: <span className="font-medium text-gray-700 dark:text-gray-300">{total}</span>
-          </p>
+          <div className="flex items-center gap-3">
+            {checkResult && (
+              <span className="text-xs text-gray-500 dark:text-gray-400">{checkResult}</span>
+            )}
+            <button
+              onClick={handleCheckReplies}
+              disabled={checking}
+              className="btn-secondary !py-1.5 !px-3 flex items-center gap-1.5 text-sm disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={checking ? 'animate-spin' : ''} />
+              {checking ? 'Проверяю...' : 'Проверить почту'}
+            </button>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Всего ответов: <span className="font-medium text-gray-700 dark:text-gray-300">{total}</span>
+            </p>
+          </div>
         </div>
 
         {loading ? (

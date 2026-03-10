@@ -250,6 +250,11 @@ export class OutreachController {
 
   // ===================== INBOX =====================
 
+  @Post('inbox/check-replies')
+  checkReplies(@CurrentUser() user: User) {
+    return this.outreachService.checkReplies(user.id);
+  }
+
   @Get('inbox')
   getInbox(
     @CurrentUser() user: User,

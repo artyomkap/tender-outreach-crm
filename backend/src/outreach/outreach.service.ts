@@ -463,7 +463,7 @@ export class OutreachService {
       const body = this.personalizeText(step.body, cl.lead);
 
       try {
-        await this.sendSingleEmail(account, cl.lead.email, subject, body);
+        const messageId = await this.sendSingleEmail(account, cl.lead.email, subject, body);
 
         // Save email record
         await this.campaignEmailRepo.save(
@@ -478,6 +478,7 @@ export class OutreachService {
             body,
             status: 'sent',
             sentAt: new Date(),
+            messageId,
           }),
         );
 
@@ -552,7 +553,7 @@ export class OutreachService {
     to: string,
     subject: string,
     body: string,
-  ): Promise<void> {
+  ): Promise<string | null> {
     const fullBody = body + (account.signature ? `\n\n${account.signature}` : '');
     const emailFrom = account.senderName
       ? `"${account.senderName}" <${account.email}>`
@@ -583,6 +584,7 @@ export class OutreachService {
       if (!response.ok || !result.ok) {
         throw new Error(result.error || `Relay returned ${response.status}`);
       }
+      return result.messageId || null;
     } else {
       // Direct SMTP
       const transporter = nodemailer.createTransport({
@@ -594,12 +596,13 @@ export class OutreachService {
         tls: { rejectUnauthorized: false, servername: account.smtpHost },
       });
 
-      await transporter.sendMail({
+      const info = await transporter.sendMail({
         from: emailFrom,
         to,
         subject,
         text: fullBody,
       });
+      return info.messageId || null;
     }
   }
 
@@ -639,6 +642,167 @@ export class OutreachService {
       take: limit,
     });
     return { data, total };
+  }
+
+  // ===================== CHECK REPLIES VIA IMAP =====================
+
+  async checkReplies(userId: string): Promise<{ checked: number; newReplies: number; errors: string[] }> {
+    // Get accounts with IMAP configured
+    const accounts = await this.emailAccountRepo.find({ where: { userId } });
+    const imapAccounts = accounts.filter((a) => a.imapHost && a.imapUser && a.imapPass);
+
+    if (imapAccounts.length === 0) {
+      return { checked: 0, newReplies: 0, errors: ['Нет аккаунтов с настроенным IMAP'] };
+    }
+
+    const { ImapFlow } = await this.loadImapFlow();
+    const simpleParser = await this.loadSimpleParser();
+
+    let totalChecked = 0;
+    let totalNewReplies = 0;
+    const errors: string[] = [];
+
+    for (const account of imapAccounts) {
+      try {
+        const { checked, newReplies } = await this.checkAccountReplies(
+          account,
+          userId,
+          ImapFlow,
+          simpleParser,
+        );
+        totalChecked += checked;
+        totalNewReplies += newReplies;
+      } catch (err: any) {
+        this.logger.error(`IMAP check failed for ${account.email}: ${err.message}`);
+        errors.push(`${account.email}: ${err.message}`);
+      }
+    }
+
+    return { checked: totalChecked, newReplies: totalNewReplies, errors };
+  }
+
+  private async checkAccountReplies(
+    account: OutreachEmailAccount,
+    userId: string,
+    ImapFlow: any,
+    simpleParser: (source: any) => Promise<any>,
+  ): Promise<{ checked: number; newReplies: number }> {
+    const client = new ImapFlow({
+      host: account.imapHost,
+      port: account.imapPort || 993,
+      secure: true,
+      auth: { user: account.imapUser, pass: account.imapPass },
+      logger: false,
+      tls: { rejectUnauthorized: false },
+    });
+
+    let checked = 0;
+    let newReplies = 0;
+
+    try {
+      await client.connect();
+      const lock = await client.getMailboxLock('INBOX');
+
+      try {
+        const totalMessages = client.mailbox?.exists || 0;
+        if (totalMessages === 0) return { checked: 0, newReplies: 0 };
+
+        const startSeq = Math.max(1, totalMessages - 49);
+
+        for await (const msg of client.fetch(`${startSeq}:*`, {
+          envelope: true,
+          source: true,
+        })) {
+          checked++;
+          const envelope = msg.envelope;
+          if (!envelope) continue;
+
+          const inReplyTo = envelope.inReplyTo || null;
+          const fromAddr = envelope.from?.[0]?.address?.toLowerCase() || '';
+
+          if (!fromAddr) continue;
+
+          // Strategy 1: Match by In-Reply-To header against stored messageId
+          if (inReplyTo) {
+            const matched = await this.campaignEmailRepo.findOne({
+              where: { messageId: inReplyTo, status: 'sent' },
+            });
+            if (matched) {
+              const replyText = await this.extractReplyText(msg.source, simpleParser);
+              await this.markAsReplied(matched, replyText);
+              newReplies++;
+              continue;
+            }
+          }
+
+          // Strategy 2: Match by sender email against toEmail of sent campaign emails
+          const matchedBySender = await this.campaignEmailRepo.findOne({
+            where: { toEmail: fromAddr, emailAccountId: account.id, status: 'sent' },
+            order: { sentAt: 'DESC' },
+          });
+          if (matchedBySender) {
+            const replyText = await this.extractReplyText(msg.source, simpleParser);
+            await this.markAsReplied(matchedBySender, replyText);
+            newReplies++;
+          }
+        }
+      } finally {
+        lock.release();
+      }
+
+      await client.logout();
+    } catch (err: any) {
+      try { await client.logout(); } catch {}
+      throw err;
+    }
+
+    return { checked, newReplies };
+  }
+
+  private async markAsReplied(campaignEmail: OutreachCampaignEmail, replyText: string): Promise<void> {
+    await this.campaignEmailRepo.update(campaignEmail.id, {
+      status: 'replied',
+      repliedAt: new Date(),
+      replyText,
+    });
+
+    // Update campaign lead status
+    await this.campaignLeadRepo.update(campaignEmail.campaignLeadId, {
+      status: 'replied',
+    });
+
+    // Increment campaign statsReplied
+    await this.campaignRepo.increment({ id: campaignEmail.campaignId }, 'statsReplied', 1);
+  }
+
+  private async extractReplyText(
+    source: Buffer | undefined,
+    simpleParser: (source: any) => Promise<any>,
+  ): Promise<string> {
+    if (!source) return '';
+    try {
+      const parsed = await simpleParser(source);
+      return parsed.text || '';
+    } catch {
+      return '';
+    }
+  }
+
+  private async loadImapFlow(): Promise<any> {
+    try {
+      return await import('imapflow');
+    } catch {
+      throw new Error('IMAP модуль не установлен (npm install imapflow)');
+    }
+  }
+
+  private async loadSimpleParser(): Promise<(source: any) => Promise<any>> {
+    try {
+      const { simpleParser } = await import('mailparser');
+      return simpleParser;
+    } catch {
+      throw new Error('mailparser модуль не установлен (npm install mailparser)');
+    }
   }
 
   // ===================== DASHBOARD STATS =====================
