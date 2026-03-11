@@ -35,6 +35,9 @@ export default function OutreachLeadsPage() {
   const [leadsPage, setLeadsPage] = useState(1);
   const [leadsLoading, setLeadsLoading] = useState(false);
   const [showAddLead, setShowAddLead] = useState(false);
+  const [showBulkAdd, setShowBulkAdd] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+  const [bulkImporting, setBulkImporting] = useState(false);
   const [importingListId, setImportingListId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -137,6 +140,44 @@ export default function OutreachLeadsPage() {
       alert(err instanceof Error ? err.message : 'Ошибка');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleBulkAdd = async () => {
+    if (!expandedListId || !bulkText.trim()) return;
+    setBulkImporting(true);
+    try {
+      const lines = bulkText.split('\n').filter((l) => l.trim());
+      const leads = lines.map((line) => {
+        // Support formats: "email, firstName, lastName" or "email firstName lastName" or just "email"
+        const sep = line.includes(',') ? ',' : line.includes(';') ? ';' : line.includes('\t') ? '\t' : ' ';
+        const parts = line.split(sep).map((p) => p.trim()).filter(Boolean);
+        return {
+          email: parts[0] || '',
+          firstName: parts[1] || undefined,
+          lastName: parts[2] || undefined,
+          company: parts[3] || undefined,
+        };
+      }).filter((l) => l.email && l.email.includes('@'));
+
+      if (leads.length === 0) {
+        alert('Не найдено валидных email-адресов');
+        return;
+      }
+
+      const result = await api.post<{ imported: number; skipped: number }>(
+        `/outreach/lead-lists/${expandedListId}/import`,
+        { leads },
+      );
+      alert(`Импортировано: ${result.imported}, пропущено: ${result.skipped}`);
+      setBulkText('');
+      setShowBulkAdd(false);
+      fetchLists();
+      fetchLeads(expandedListId, leadsPage);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Ошибка импорта');
+    } finally {
+      setBulkImporting(false);
     }
   };
 
@@ -341,13 +382,57 @@ export default function OutreachLeadsPage() {
                   <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
                     <div className="flex items-center justify-between mb-3">
                       <p className="text-xs text-gray-500">{leadsTotal} лидов</p>
-                      <button
-                        onClick={() => setShowAddLead(!showAddLead)}
-                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-primary-600 bg-primary-50 dark:bg-primary-900/30 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
-                      >
-                        <Plus size={12} /> Добавить лида
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => { setShowBulkAdd(!showBulkAdd); setShowAddLead(false); }}
+                          className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 rounded-md hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors"
+                        >
+                          <Users size={12} /> Массовое добавление
+                        </button>
+                        <button
+                          onClick={() => { setShowAddLead(!showAddLead); setShowBulkAdd(false); }}
+                          className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-primary-600 bg-primary-50 dark:bg-primary-900/30 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
+                        >
+                          <Plus size={12} /> Добавить лида
+                        </button>
+                      </div>
                     </div>
+
+                    {showBulkAdd && (
+                      <div className="mb-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50">
+                        <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Вставьте лидов по одному на строку. Формат: <code className="text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">email, имя, фамилия, компания</code>
+                        </p>
+                        <textarea
+                          value={bulkText}
+                          onChange={(e) => setBulkText(e.target.value)}
+                          rows={8}
+                          className="input-field text-xs font-mono w-full"
+                          placeholder={`ivan@example.com, Иван, Петров, ООО Ромашка\nanna@company.ru, Анна, Сидорова\npeter@mail.com`}
+                        />
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-xs text-gray-400">
+                            {bulkText.trim() ? `${bulkText.split('\n').filter((l) => l.trim()).length} строк` : 'Пусто'}
+                          </span>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={handleBulkAdd}
+                              disabled={bulkImporting || !bulkText.trim()}
+                              className="btn-primary !py-1 !px-3 text-xs flex items-center gap-1 disabled:opacity-50"
+                            >
+                              {bulkImporting ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                              Импортировать
+                            </button>
+                            <button
+                              onClick={() => { setShowBulkAdd(false); setBulkText(''); }}
+                              className="btn-secondary !py-1 !px-3 text-xs"
+                            >
+                              Отмена
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {showAddLead && (
                       <form onSubmit={handleAddLead} className="mb-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50">
