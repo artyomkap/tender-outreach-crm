@@ -40,6 +40,10 @@ import {
   Rocket,
   Key,
   Coins,
+  Radio,
+  ContactRound,
+  ShieldBan,
+  BarChart2,
 } from 'lucide-react';
 import { useState } from 'react';
 import SshSidebarSection from './ssh-sidebar-section';
@@ -167,6 +171,32 @@ const navItems: NavItem[] = [
         label: 'Входящие',
         href: '/outreach/inbox',
         icon: <Inbox size={16} />,
+        roles: ALL_ROLES,
+      },
+    ],
+  },
+  {
+    label: 'Рассылки',
+    href: '/mailings',
+    icon: <Radio size={20} />,
+    roles: ALL_ROLES,
+    children: [
+      {
+        label: 'Аккаунты',
+        href: '/mailings/accounts',
+        icon: <ContactRound size={16} />,
+        roles: ALL_ROLES,
+      },
+      {
+        label: 'Чёрный список',
+        href: '/mailings/blocked',
+        icon: <ShieldBan size={16} />,
+        roles: ALL_ROLES,
+      },
+      {
+        label: 'Статистика',
+        href: '/mailings/statistics',
+        icon: <BarChart2 size={16} />,
         roles: ALL_ROLES,
       },
     ],

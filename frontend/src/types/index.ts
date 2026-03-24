@@ -563,3 +563,130 @@ export interface OutreachDashboardStats {
   totalReplied: number;
   totalBounced: number;
 }
+
+// --- Autosending (Рассылки) ---
+
+export type AutosendingSource = 'whatsapp' | 'telegram' | 'sms' | 'max' | 'vk';
+export type AutosendingProjectStatus = 'active' | 'paused' | 'completed' | 'canceled' | 'delayed';
+export type AutosendingMessageStatus = 'pending' | 'scheduled' | 'sent' | 'delivered' | 'read' | 'error' | 'canceled';
+
+export interface AutosendingAccount {
+  uuid: string;
+  userUuid: string;
+  source: AutosendingSource;
+  login: string;
+  token: string;
+  fromAlias?: string;
+}
+
+export interface AutosendingWorkingHours {
+  monday: { startTime: string; endTime: string };
+  tuesday: { startTime: string; endTime: string };
+  wednesday: { startTime: string; endTime: string };
+  thursday: { startTime: string; endTime: string };
+  friday: { startTime: string; endTime: string };
+  saturday: { startTime: string; endTime: string };
+  sunday: { startTime: string; endTime: string };
+}
+
+export interface AutosendingFileInfo {
+  uuid: string;
+  originalName?: string;
+  url?: string;
+}
+
+export interface AutosendingMessage {
+  uuid: string;
+  sendingProjectUuid: string;
+  to: string;
+  text: string;
+  status: string;
+  finishedAt?: string;
+  sendedSource?: AutosendingSource;
+  errorMessage?: string;
+}
+
+export interface AutosendingRecipient {
+  uuid: string;
+  phone: string;
+  priority?: number;
+  processingStatus?: string;
+  variables?: Record<string, string>;
+}
+
+export interface AutosendingSendingProject {
+  uuid: string;
+  userUuid: string;
+  name: string;
+  text: string;
+  minInterval: number;
+  maxInterval: number;
+  status: AutosendingProjectStatus;
+  processingStatus?: string;
+  workingHours: AutosendingWorkingHours;
+  timezone: number;
+  fileUuid?: string;
+  sendFileSeparately?: boolean;
+  sendOnlyToExistingChats?: boolean;
+  blockedUntil?: string;
+  completedAt?: string;
+  createdAt?: string;
+  variables?: boolean;
+  spintax?: boolean;
+  recipientCount?: number;
+  nextMessage?: AutosendingMessage[];
+  file?: AutosendingFileInfo;
+  accounts?: AutosendingAccount[];
+  accountUuids?: string[];
+}
+
+export interface AutosendingBlockedPhone {
+  uuid: string;
+  userUuid: string;
+  phone: string;
+}
+
+export interface AutosendingProjectStatistics {
+  uuid: string;
+  name: string;
+  createdAt: string;
+  accountToken?: string;
+  statistics: {
+    pending?: number;
+    scheduled?: number;
+    sent?: number;
+    delivered?: number;
+    read?: number;
+    error?: number;
+    canceled?: number;
+    total?: number;
+  };
+}
+
+export interface AutosendingTotalStatistics {
+  sendingProjects: number;
+  recipients: number;
+  sendedMessages: number;
+}
+
+export interface AutosendingImportResult {
+  importUuid: string;
+  firstValidPhones: string[];
+  validPhonesCount: number;
+  blockedPhonesCount: number;
+  allPhonesCount: number;
+}
+
+export interface AutosendingTariffConfig {
+  name: string;
+  features?: Record<string, unknown>;
+  limits?: Record<string, unknown>;
+  variants?: Record<string, unknown>;
+}
+
+export interface AutosendingUserTariff {
+  type: 'base' | 'pro' | 'max' | 'vendor';
+  userUuid: string;
+  createdAt: string;
+  paidUntil?: string;
+}
