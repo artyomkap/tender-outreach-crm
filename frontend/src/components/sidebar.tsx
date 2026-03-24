@@ -41,7 +41,7 @@ import {
   Key,
   Coins,
   Radio,
-  ContactRound,
+  Contact,
   ShieldBan,
   BarChart2,
 } from 'lucide-react';
@@ -184,7 +184,7 @@ const navItems: NavItem[] = [
       {
         label: 'Аккаунты',
         href: '/mailings/accounts',
-        icon: <ContactRound size={16} />,
+        icon: <Contact size={16} />,
         roles: ALL_ROLES,
       },
       {

@@ -6,7 +6,7 @@ import Header from '@/components/header';
 import { autosendingApi } from '@/lib/autosending-api';
 import { AutosendingAccount, AutosendingSource } from '@/types';
 import {
-  ContactRound,
+  Contact,
   Plus,
   Trash2,
   Loader2,
@@ -155,7 +155,7 @@ export default function MailingAccountsPage() {
           </div>
         ) : accounts.length === 0 ? (
           <div className="card p-8 text-center text-gray-500 dark:text-gray-400">
-            <ContactRound size={48} className="mx-auto mb-4 opacity-30" />
+            <Contact size={48} className="mx-auto mb-4 opacity-30" />
             <p>Аккаунты не найдены</p>
           </div>
         ) : (
