@@ -6,7 +6,6 @@ import { Purchase, PurchaseFile, PurchaseAiResult, WebSearchResult } from '@/typ
 import {
   Wand2,
   FileText,
-  Save,
   Sparkles,
   Globe,
   AtSign,
@@ -16,6 +15,7 @@ import {
   ChevronDown,
   ChevronUp,
   Mail,
+  Send,
 } from 'lucide-react';
 
 interface PipelineStep {
@@ -29,9 +29,10 @@ interface PipelineStep {
 interface MagicPipelineProps {
   purchase: Purchase;
   onComplete?: () => void;
+  onApprove?: (data: { emails: string[]; subject: string; body: string }) => void;
 }
 
-export default function MagicPipeline({ purchase, onComplete }: MagicPipelineProps) {
+export default function MagicPipeline({ purchase, onComplete, onApprove }: MagicPipelineProps) {
   const [running, setRunning] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [steps, setSteps] = useState<PipelineStep[]>([]);
@@ -329,25 +330,40 @@ export default function MagicPipeline({ purchase, onComplete }: MagicPipelinePro
 
               {/* Summary with emails */}
               {result?.emails && result.emails.length > 0 && !running && (
-                <div className="mt-3 p-3 rounded-lg bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-800">
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <AtSign size={12} className="text-teal-500" />
-                    <span className="text-xs font-medium text-teal-600 dark:text-teal-400">
-                      Найденные адреса ({result.emails.length})
-                    </span>
+                <div className="mt-3 space-y-3">
+                  <div className="p-3 rounded-lg bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-800">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <AtSign size={12} className="text-teal-500" />
+                      <span className="text-xs font-medium text-teal-600 dark:text-teal-400">
+                        Найденные адреса ({result.emails.length})
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {result.emails.map((email) => (
+                        <span
+                          key={email}
+                          className="inline-flex items-center gap-0.5 px-2 py-0.5 text-xs font-medium rounded-full bg-teal-100 dark:bg-teal-800/50 text-teal-700 dark:text-teal-300"
+                        >
+                          <Mail size={10} />
+                          {email}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {result.emails.map((email) => (
-                      <a
-                        key={email}
-                        href={`mailto:${email}${result.aiResult?.subject ? `?subject=${encodeURIComponent(result.aiResult.subject)}&body=${encodeURIComponent(result.aiResult.body || '')}` : ''}`}
-                        className="inline-flex items-center gap-0.5 px-2 py-0.5 text-xs font-medium rounded-full bg-teal-100 dark:bg-teal-800/50 text-teal-700 dark:text-teal-300 hover:bg-teal-200 dark:hover:bg-teal-700/50 transition-colors"
-                      >
-                        <Mail size={10} />
-                        {email}
-                      </a>
-                    ))}
-                  </div>
+
+                  {onApprove && (
+                    <button
+                      onClick={() => onApprove({
+                        emails: result.emails!,
+                        subject: result.aiResult?.subject || '',
+                        body: result.aiResult?.body || '',
+                      })}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-sm"
+                    >
+                      <Send size={16} />
+                      Утвердить тендер в рассылку →
+                    </button>
+                  )}
                 </div>
               )}
             </div>

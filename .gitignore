@@ -10,3 +10,6 @@ build/
 coverage/
 .nyc_output/
 *.tsbuildinfo
+.claude/
+SETUP.md
+TZ_tender_email_outreach_project.md

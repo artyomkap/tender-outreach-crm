@@ -29,6 +29,8 @@ import {
   MessageSquare,
   AlertTriangle,
   XCircle,
+  Reply,
+  CircleDot,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -39,13 +41,13 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   completed: { label: 'Завершена', color: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
 };
 
-const LEAD_STATUS_LABELS: Record<string, string> = {
-  pending: 'Ожидает',
-  in_progress: 'В работе',
-  completed: 'Завершён',
-  replied: 'Ответил',
-  bounced: 'Отскочило',
-  unsubscribed: 'Отписался',
+const LEAD_STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  pending:      { label: 'В очереди',        color: 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',          icon: <Clock size={10} /> },
+  in_progress:  { label: 'Отправляется',     color: 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',        icon: <Loader2 size={10} className="animate-spin" /> },
+  completed:    { label: 'Отправлено',       color: 'bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400',    icon: <CheckCircle size={10} /> },
+  replied:      { label: 'Ответил',          color: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400', icon: <Reply size={10} /> },
+  bounced:      { label: 'Ошибка доставки', color: 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400',            icon: <XCircle size={10} /> },
+  unsubscribed: { label: 'Отписался',       color: 'bg-orange-50 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400', icon: <CircleDot size={10} /> },
 };
 
 export default function CampaignsPage() {
@@ -163,7 +165,12 @@ export default function CampaignsPage() {
       const updated = await api.post<OutreachCampaign>(`/outreach/campaigns/${id}/launch`, {});
       setCampaigns((prev) => prev.map((c) => (c.id === id ? { ...c, status: updated.status } : c)));
       setDetailCampaign(updated);
-      alert('Кампания запущена!');
+
+      // Сразу отправляем, не ждём планировщика
+      const result = await api.post<{ sent: number; errors: number }>(`/outreach/campaigns/${id}/send`, {});
+      alert(`Рассылка запущена! Отправлено: ${result.sent}${result.errors > 0 ? `, ошибок: ${result.errors}` : ''}`);
+      fetchCampaigns();
+      if (expandedId === id) handleExpand(id);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ошибка');
     } finally {
@@ -221,6 +228,23 @@ export default function CampaignsPage() {
         ? prev.emailAccountIds.filter((id) => id !== accountId)
         : [...prev.emailAccountIds, accountId],
     }));
+  };
+
+  const handleUpdateAccounts = async (campaignId: string, accountIds: string[]) => {
+    try {
+      await api.patch(`/outreach/campaigns/${campaignId}`, { emailAccountIds: accountIds });
+      setCampaigns((prev) => prev.map((c) => c.id === campaignId ? { ...c, emailAccountIds: accountIds } : c));
+      setDetailCampaign((prev) => prev ? { ...prev, emailAccountIds: accountIds } : prev);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Ошибка');
+    }
+  };
+
+  const toggleDetailAccount = (campaignId: string, accountId: string, current: string[]) => {
+    const next = current.includes(accountId)
+      ? current.filter((id) => id !== accountId)
+      : [...current, accountId];
+    handleUpdateAccounts(campaignId, next);
   };
 
   const addStep = () => {
@@ -388,6 +412,37 @@ export default function CampaignsPage() {
                   {/* Campaign Detail */}
                   {expandedId === campaign.id && detailCampaign && (
                     <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 space-y-6">
+                      {/* Email Accounts */}
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          Почтовые аккаунты для отправки
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {emailAccounts.filter((a) => a.status === 'active').map((acc) => {
+                            const selected = (detailCampaign.emailAccountIds || []).includes(acc.id);
+                            return (
+                              <button key={acc.id} type="button"
+                                onClick={() => toggleDetailAccount(campaign.id, acc.id, detailCampaign.emailAccountIds || [])}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                                  selected
+                                    ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
+                                    : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-400'
+                                }`}
+                              >
+                                <Mail size={12} /> {acc.email}
+                              </button>
+                            );
+                          })}
+                          {emailAccounts.filter((a) => a.status === 'active').length === 0 && (
+                            <p className="text-xs text-gray-400">
+                              Нет активных аккаунтов. <Link href="/outreach/accounts" className="text-primary-600">Добавить →</Link>
+                            </p>
+                          )}
+                        </div>
+                        {(detailCampaign.emailAccountIds || []).length === 0 && emailAccounts.filter((a) => a.status === 'active').length > 0 && (
+                          <p className="text-xs text-amber-500 mt-1.5">Выберите хотя бы один аккаунт для запуска рассылки</p>
+                        )}
+                      </div>
                       {/* Stats */}
                       <div className="grid grid-cols-4 gap-3">
                         <div className="flex items-center gap-2 p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20">
@@ -486,24 +541,27 @@ export default function CampaignsPage() {
                             Лиды ({detailCampaign.campaignLeads.length})
                           </h4>
                           <div className="space-y-1 max-h-60 overflow-y-auto">
-                            {detailCampaign.campaignLeads.slice(0, 50).map((cl) => (
-                              <div key={cl.id} className="flex items-center justify-between gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 text-xs">
-                                <span className="text-gray-900 dark:text-gray-100 truncate">
-                                  {cl.lead?.email || cl.leadId}
-                                </span>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <span className="text-gray-400">Шаг {cl.currentStep}/{detailCampaign.steps?.length || 0}</span>
-                                  <span className={`px-1.5 py-0.5 rounded-full ${
-                                    cl.status === 'replied' ? 'bg-green-50 text-green-600 dark:bg-green-900/30' :
-                                    cl.status === 'bounced' ? 'bg-red-50 text-red-600 dark:bg-red-900/30' :
-                                    cl.status === 'completed' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30' :
-                                    'bg-gray-100 text-gray-500 dark:bg-gray-700'
-                                  }`}>
-                                    {LEAD_STATUS_LABELS[cl.status] || cl.status}
+                            {detailCampaign.campaignLeads.slice(0, 50).map((cl) => {
+                              const total = detailCampaign.steps?.length || 0;
+                              const cfg = LEAD_STATUS_CONFIG[cl.status] || LEAD_STATUS_CONFIG.pending;
+                              const stepLabel = cl.status === 'pending'
+                                ? 'Ещё не отправлено'
+                                : `Письмо ${cl.currentStep} из ${total}`;
+                              return (
+                                <div key={cl.id} className="flex items-center justify-between gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 text-xs">
+                                  <span className="text-gray-900 dark:text-gray-100 truncate">
+                                    {cl.lead?.email || cl.leadId}
                                   </span>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span className="text-gray-400">{stepLabel}</span>
+                                    <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full font-medium ${cfg.color}`}>
+                                      {cfg.icon}
+                                      {cfg.label}
+                                    </span>
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       )}

@@ -166,6 +166,7 @@ export interface FoundPurchase {
   userId: string;
   purchaseId: string;
   searchQueryId: string | null;
+  searchQuery?: { id: string; queryParams: Record<string, unknown>; resultsCount: number; createdAt: string } | null;
   isFavorite: boolean;
   createdAt: string;
   purchase: Purchase;

@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { OutreachService } from '../outreach/outreach.service';
 import { Repository } from 'typeorm';
 import { Purchase } from './entities/purchase.entity';
 import { PurchaseFile } from './entities/purchase-file.entity';
@@ -47,6 +48,7 @@ export class PurchasesService {
     private readonly parsedEmailRepository: Repository<ParsedEmail>,
     @InjectRepository(EmailBlacklist)
     private readonly blacklistRepository: Repository<EmailBlacklist>,
+    private readonly outreachService: OutreachService,
   ) {}
 
   // --- Email Blacklist ---
@@ -264,7 +266,7 @@ export class PurchasesService {
 
     const [data, total] = await this.foundPurchaseRepository.findAndCount({
       where: { userId },
-      relations: ['purchase', 'purchase.files'],
+      relations: ['purchase', 'purchase.files', 'searchQuery'],
       order: { createdAt: 'DESC' },
       skip,
       take: limit,
@@ -504,6 +506,35 @@ export class PurchasesService {
     }
   }
 
+  async getFilePreviewContent(fileId: string): Promise<{ text: string; fileName: string }> {
+    const file = await this.purchaseFileRepository.findOne({ where: { id: fileId } });
+    if (!file) throw new NotFoundException('Файл не найден');
+
+    // Return cached text if already parsed
+    if (file.parsedText) {
+      return { text: file.parsedText, fileName: file.fileName || file.docDescription || 'Документ' };
+    }
+
+    const parserDocsUrl = process.env.PARSER_DOCS_URL;
+    const proxyUrl = process.env.PROXY_URL;
+
+    if (!parserDocsUrl || !proxyUrl) {
+      throw new BadRequestException('PARSER_DOCS_URL и PROXY_URL не настроены в .env');
+    }
+
+    const proxiedUrl = proxyUrl + encodeURIComponent(file.url);
+    const finalUrl = parserDocsUrl + encodeURIComponent(proxiedUrl);
+
+    const response = await fetch(finalUrl, { signal: AbortSignal.timeout(30000) });
+    if (!response.ok) {
+      throw new BadRequestException(`Ошибка парсера: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const text = data.text || '';
+    return { text, fileName: file.fileName || file.docDescription || 'Документ' };
+  }
+
   async parseAndSaveFileText(
     fileId: string,
     user: { settings?: { parserDocsUrl?: string; proxyUrl?: string } | null },
@@ -516,11 +547,11 @@ export class PurchasesService {
       throw new NotFoundException('Файл не найден');
     }
 
-    const parserDocsUrl = user.settings?.parserDocsUrl;
-    const proxyUrl = user.settings?.proxyUrl;
+    const parserDocsUrl = user.settings?.parserDocsUrl || process.env.PARSER_DOCS_URL;
+    const proxyUrl = user.settings?.proxyUrl || process.env.PROXY_URL;
 
     if (!parserDocsUrl || !proxyUrl) {
-      throw new BadRequestException('Настройте Parser Docs URL и Proxy URL в профиле');
+      throw new BadRequestException('Переменные PARSER_DOCS_URL и PROXY_URL не настроены');
     }
 
     const encodedFileUrl = encodeURIComponent(file.url);
@@ -570,14 +601,14 @@ export class PurchasesService {
       } | null;
     },
   ): Promise<PurchaseAiResult> {
-    const aiUrl = user.settings?.aiUrl;
-    const aiPrompt = user.settings?.aiPrompt;
+    const aiUrl = user.settings?.aiUrl || process.env.AI_URL;
+    const aiPrompt = user.settings?.aiPrompt || process.env.AI_PROMPT;
 
     if (!aiUrl) {
-      throw new BadRequestException('Настройте AI URL в профиле');
+      throw new BadRequestException('Переменная AI_URL не настроена');
     }
     if (!aiPrompt) {
-      throw new BadRequestException('Настройте AI промпт в профиле');
+      throw new BadRequestException('Переменная AI_PROMPT не настроена');
     }
 
     const purchase = await this.purchaseRepository.findOne({
@@ -791,9 +822,9 @@ export class PurchasesService {
     searchTermId: string,
     user: { id: string; settings?: { searchApiUrl?: string } | null },
   ): Promise<any[]> {
-    const searchApiUrl = user.settings?.searchApiUrl;
+    const searchApiUrl = user.settings?.searchApiUrl || process.env.SEARCH_API_URL;
     if (!searchApiUrl) {
-      throw new BadRequestException('Настройте Search API URL в профиле');
+      throw new BadRequestException('Переменная SEARCH_API_URL не настроена');
     }
 
     const term = await this.aiSearchTermRepository.findOne({
@@ -1290,12 +1321,36 @@ export class PurchasesService {
     await this.foundPurchaseRepository.delete({ id, userId });
   }
 
+  async deleteFoundPurchasesByQueryId(searchQueryId: string | null, userId: string): Promise<void> {
+    if (searchQueryId === null) {
+      await this.foundPurchaseRepository
+        .createQueryBuilder()
+        .delete()
+        .where('user_id = :userId AND search_query_id IS NULL', { userId })
+        .execute();
+    } else {
+      await this.foundPurchaseRepository.delete({ userId, searchQueryId });
+    }
+  }
+
   async deleteSearchQuery(id: string, userId: string): Promise<void> {
     await this.searchQueryRepository.delete({ id, userId });
   }
 
   async deleteHistory(id: string, userId: string): Promise<void> {
     await this.historyRepository.delete({ id, userId });
+  }
+
+  async deleteHistoryByQuery(searchQuery: string | null, userId: string): Promise<void> {
+    if (searchQuery === null) {
+      await this.historyRepository
+        .createQueryBuilder()
+        .delete()
+        .where('user_id = :userId AND search_query IS NULL', { userId })
+        .execute();
+    } else {
+      await this.historyRepository.delete({ userId, searchQuery });
+    }
   }
 
   async deleteAiResult(id: string, userId: string): Promise<void> {
@@ -1315,5 +1370,41 @@ export class PurchasesService {
     await this.webSearchResultEmailRepository.delete({ webSearchResultId: id });
     await this.webSearchResultSearchTermRepository.delete({ webSearchResultId: id });
     await this.webSearchResultRepository.delete({ id });
+  }
+
+  // --- Approve tender to Email Outreach ---
+
+  async approveToOutreach(
+    purchaseId: string,
+    userId: string,
+    data: { emails: string[]; subject: string; body: string },
+  ): Promise<{ campaignId: string }> {
+    const purchase = await this.purchaseRepository.findOne({ where: { id: purchaseId } });
+    if (!purchase) throw new NotFoundException('Закупка не найдена');
+    if (!data.emails || data.emails.length === 0) {
+      throw new BadRequestException('Нет email-адресов для рассылки');
+    }
+
+    const name = `Тендер ${purchase.purchaseNumber}`;
+
+    const leadList = await this.outreachService.createLeadList(userId, name);
+    await this.outreachService.importLeads(
+      userId,
+      leadList.id,
+      data.emails.map((email) => ({ email })),
+    );
+
+    const campaign = await this.outreachService.createCampaign(userId, {
+      name,
+      leadListId: leadList.id,
+    });
+
+    if (data.subject || data.body) {
+      await this.outreachService.saveSteps(campaign.id, userId, [
+        { subject: data.subject, body: data.body },
+      ]);
+    }
+
+    return { campaignId: campaign.id };
   }
 }

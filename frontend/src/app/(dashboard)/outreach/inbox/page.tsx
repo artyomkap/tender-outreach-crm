@@ -12,10 +12,10 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
-  Mail,
   Clock,
   Send,
   RefreshCw,
+  ExternalLink,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -59,6 +59,12 @@ export default function OutreachInboxPage() {
   useEffect(() => {
     fetchInbox();
   }, [fetchInbox]);
+
+  // Auto-check replies when page opens
+  useEffect(() => {
+    handleCheckReplies();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleCheckReplies = async () => {
     setChecking(true);
@@ -163,11 +169,21 @@ export default function OutreachInboxPage() {
                         </div>
                       </div>
                     </div>
-                    {expandedId === email.id ? (
-                      <ChevronUp size={16} className="text-gray-400 shrink-0" />
-                    ) : (
-                      <ChevronDown size={16} className="text-gray-400 shrink-0" />
-                    )}
+                    <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      {email.replyText && (
+                        <Link
+                          href={`/messenger?email=${encodeURIComponent(email.toEmail)}`}
+                          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-primary-600 bg-primary-50 dark:bg-primary-900/20 dark:text-primary-400 rounded-md hover:bg-primary-100 transition-colors"
+                        >
+                          <ExternalLink size={12} /> Открыть в мессенджере
+                        </Link>
+                      )}
+                      {expandedId === email.id ? (
+                        <ChevronUp size={16} className="text-gray-400" />
+                      ) : (
+                        <ChevronDown size={16} className="text-gray-400" />
+                      )}
+                    </div>
                   </div>
 
                   {expandedId === email.id && (

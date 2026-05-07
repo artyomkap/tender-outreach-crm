@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import Header from '@/components/header';
 import { api } from '@/lib/api';
-import { Purchase, SearchResponse, PurchaseAiResult } from '@/types';
+import { Purchase, SearchResponse } from '@/types';
 import {
   Search,
   ChevronDown,
@@ -12,11 +12,7 @@ import {
   ExternalLink,
   FileText,
   Clock,
-  Star,
-  History,
   FolderSearch,
-  Sparkles,
-  Loader2,
 } from 'lucide-react';
 import Link from 'next/link';
 import MagicButtonCompact from '@/components/magic-button-compact';
@@ -54,8 +50,6 @@ export default function PurchasesPage() {
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [debugUrl, setDebugUrl] = useState('');
-  const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [pipelineCounts, setPipelineCounts] = useState<Record<string, any>>({});
 
   const [form, setForm] = useState({
@@ -76,7 +70,6 @@ export default function PurchasesPage() {
       setLoading(true);
       setError('');
       setSearched(true);
-      setDebugUrl('');
 
       try {
         const params = new URLSearchParams();
@@ -92,7 +85,6 @@ export default function PurchasesPage() {
 
         const data = await api.get<SearchResponse>(`/purchases/search?${params.toString()}`);
         setResults(data.results);
-        setDebugUrl(data.debugUrl);
 
         // Fetch pipeline counts for all results
         if (data.results.length > 0) {
@@ -120,43 +112,12 @@ export default function PurchasesPage() {
     }
   }, [results]);
 
-  const [preparingId, setPreparingId] = useState<string | null>(null);
-
-  const handlePrepare = useCallback(async (purchaseId: string) => {
-    if (preparingId) return;
-    setPreparingId(purchaseId);
-    try {
-      await api.post<PurchaseAiResult>(`/purchases/${purchaseId}/prepare`, {});
-      alert('AI-анализ завершён');
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Ошибка AI-анализа');
-    } finally {
-      setPreparingId(null);
-    }
-  }, [preparingId]);
-
-  const toggleFavorite = useCallback(async (purchaseId: string) => {
-    try {
-      const res = await api.post<{ isFavorite: boolean }>(`/purchases/favorites/${purchaseId}`, {});
-      setFavorites((prev) => {
-        const next = new Set(prev);
-        if (res.isFavorite) {
-          next.add(purchaseId);
-        } else {
-          next.delete(purchaseId);
-        }
-        return next;
-      });
-    } catch {
-      // ignore
-    }
-  }, []);
 
   if (!user) return null;
 
   return (
     <>
-      <Header title="Закупки" user={user} />
+      <Header title="Тендеры" user={user} />
       <div className="p-6">
         {/* Search form */}
         <form onSubmit={handleSearch} className="card mb-6">
@@ -293,7 +254,7 @@ export default function PurchasesPage() {
           )}
         </form>
 
-        {/* Navigation links */}
+        {/* Results count + quick links */}
         <div className="flex flex-wrap items-center gap-4 mb-4">
           {searched && (
             <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -302,13 +263,6 @@ export default function PurchasesPage() {
           )}
           <div className="flex items-center gap-4 ml-auto">
             <Link
-              href="/purchases/search-queries"
-              className="flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
-            >
-              <History size={16} />
-              История запросов
-            </Link>
-            <Link
               href="/purchases/found"
               className="flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
             >
@@ -316,36 +270,14 @@ export default function PurchasesPage() {
               Найденные
             </Link>
             <Link
-              href="/purchases/favorites"
-              className="flex items-center gap-1.5 text-sm text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 transition-colors"
-            >
-              <Star size={16} />
-              Избранное
-            </Link>
-            <Link
               href="/purchases/history"
               className="flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
             >
               <Clock size={16} />
-              История просмотров
+              История
             </Link>
           </div>
         </div>
-
-        {/* Debug URL */}
-        {debugUrl && (
-          <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 mb-4">
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 font-medium">Debug URL:</p>
-            <a
-              href={debugUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-primary-600 dark:text-primary-400 hover:underline break-all font-mono"
-            >
-              {debugUrl}
-            </a>
-          </div>
-        )}
 
         {/* Error */}
         {error && (
@@ -427,35 +359,11 @@ export default function PurchasesPage() {
                     </p>
                     <div className="flex items-center gap-2">
                       <MagicButtonCompact purchaseId={purchase.id} onComplete={refreshPipelineCounts} />
-                      <button
-                        onClick={() => handlePrepare(purchase.id)}
-                        disabled={preparingId === purchase.id}
-                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 rounded-md hover:bg-violet-100 dark:hover:bg-violet-900/50 transition-colors disabled:opacity-50"
-                        title="AI-анализ"
-                      >
-                        {preparingId === purchase.id ? (
-                          <Loader2 size={14} className="animate-spin" />
-                        ) : (
-                          <Sparkles size={14} />
-                        )}
-                        Prepare
-                      </button>
-                      <button
-                        onClick={() => toggleFavorite(purchase.id)}
-                        className={`p-1.5 rounded-lg transition-colors ${
-                          favorites.has(purchase.id)
-                            ? 'text-amber-500 hover:text-amber-600'
-                            : 'text-gray-400 hover:text-amber-500'
-                        }`}
-                        title={favorites.has(purchase.id) ? 'Убрать из избранного' : 'В избранное'}
-                      >
-                        <Star size={18} fill={favorites.has(purchase.id) ? 'currentColor' : 'none'} />
-                      </button>
                       <Link
                         href={`/purchases/${purchase.purchaseNumber}`}
-                        className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 transition-colors"
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 rounded-md transition-colors"
                       >
-                        Подробнее <ExternalLink size={12} />
+                        Открыть <ExternalLink size={12} />
                       </Link>
                     </div>
                   </div>

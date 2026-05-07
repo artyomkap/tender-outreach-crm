@@ -503,6 +503,16 @@ export class OutreachService {
         sent++;
         await this.campaignRepo.increment({ id: campaignId }, 'statsSent', 1);
 
+        // Update account daily sent counter
+        const today = new Date().toISOString().slice(0, 10);
+        if (account.sentTodayDate !== today) {
+          account.sentToday = 1;
+          account.sentTodayDate = today;
+        } else {
+          account.sentToday = (account.sentToday || 0) + 1;
+        }
+        await this.emailAccountRepo.save(account);
+
         // Random delay between sends (2-8 seconds to simulate human)
         await new Promise((r) => setTimeout(r, 2000 + Math.random() * 6000));
       } catch (err: any) {

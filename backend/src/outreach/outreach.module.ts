@@ -32,5 +32,6 @@ import { UsersModule } from '../users/users.module';
   ],
   controllers: [OutreachController],
   providers: [OutreachService],
+  exports: [OutreachService],
 })
 export class OutreachModule {}

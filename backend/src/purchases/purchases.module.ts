@@ -15,9 +15,11 @@ import { ParsedEmail } from './entities/parsed-email.entity';
 import { EmailBlacklist } from './entities/email-blacklist.entity';
 import { PurchasesService } from './purchases.service';
 import { PurchasesController } from './purchases.controller';
+import { OutreachModule } from '../outreach/outreach.module';
 
 @Module({
   imports: [
+    OutreachModule,
     TypeOrmModule.forFeature([
       Purchase,
       PurchaseFile,

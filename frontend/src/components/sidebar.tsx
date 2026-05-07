@@ -19,34 +19,17 @@ import {
   LogOut,
   Menu,
   X,
-  History,
   FolderSearch,
-  Star,
   Clock,
-  Sparkles,
-  Search,
-  Mail,
-  AtSign,
-  Smartphone,
   Ban,
   Inbox,
-  Send,
   MessageCircle,
-  Globe2,
   Zap,
   MailPlus,
   UsersRound,
-  Megaphone as MegaphoneIcon,
   Rocket,
-  Key,
-  Coins,
-  Radio,
-  Contact,
-  ShieldBan,
-  BarChart2,
 } from 'lucide-react';
 import { useState } from 'react';
-import SshSidebarSection from './ssh-sidebar-section';
 import ThemeSwitcher from './theme-switcher';
 import type { UserSettings } from '@/types';
 
@@ -68,17 +51,11 @@ const navItems: NavItem[] = [
     roles: ALL_ROLES,
   },
   {
-    label: 'Закупки',
+    label: 'Тендеры',
     href: '/purchases',
     icon: <ShoppingCart size={20} />,
     roles: ALL_ROLES,
     children: [
-      {
-        label: 'История запросов',
-        href: '/purchases/search-queries',
-        icon: <History size={16} />,
-        roles: ALL_ROLES,
-      },
       {
         label: 'Найденные',
         href: '/purchases/found',
@@ -86,59 +63,15 @@ const navItems: NavItem[] = [
         roles: ALL_ROLES,
       },
       {
-        label: 'Избранное',
-        href: '/purchases/favorites',
-        icon: <Star size={16} />,
-        roles: ALL_ROLES,
-      },
-      {
-        label: 'История просмотров',
+        label: 'История',
         href: '/purchases/history',
         icon: <Clock size={16} />,
-        roles: ALL_ROLES,
-      },
-      {
-        label: 'Поисковые запросы',
-        href: '/purchases/search-terms',
-        icon: <Search size={16} />,
-        roles: ALL_ROLES,
-      },
-      {
-        label: 'Email-адреса',
-        href: '/purchases/emails',
-        icon: <AtSign size={16} />,
-        roles: ALL_ROLES,
-      },
-      {
-        label: 'Подготовленные письма',
-        href: '/purchases/letters',
-        icon: <Mail size={16} />,
         roles: ALL_ROLES,
       },
       {
         label: 'Чёрный список',
         href: '/purchases/blacklist',
         icon: <Ban size={16} />,
-        roles: ALL_ROLES,
-      },
-      {
-        label: 'Почта',
-        href: '/purchases/mail',
-        icon: <Inbox size={16} />,
-        roles: ALL_ROLES,
-      },
-    ],
-  },
-  {
-    label: 'Закупки Украина',
-    href: '/prozorro',
-    icon: <Globe2 size={20} />,
-    roles: ALL_ROLES,
-    children: [
-      {
-        label: 'Воронка рассылки',
-        href: '/prozorro/outreach',
-        icon: <Send size={16} />,
         roles: ALL_ROLES,
       },
     ],
@@ -150,21 +83,21 @@ const navItems: NavItem[] = [
     roles: ALL_ROLES,
     children: [
       {
-        label: 'Почтовые аккаунты',
-        href: '/outreach/accounts',
-        icon: <MailPlus size={16} />,
+        label: 'Кампании',
+        href: '/outreach/campaigns',
+        icon: <Zap size={16} />,
         roles: ALL_ROLES,
       },
       {
-        label: 'База лидов',
+        label: 'Получатели',
         href: '/outreach/leads',
         icon: <UsersRound size={16} />,
         roles: ALL_ROLES,
       },
       {
-        label: 'Кампании',
-        href: '/outreach/campaigns',
-        icon: <Zap size={16} />,
+        label: 'Почтовые аккаунты',
+        href: '/outreach/accounts',
+        icon: <MailPlus size={16} />,
         roles: ALL_ROLES,
       },
       {
@@ -176,53 +109,9 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    label: 'Рассылки',
-    href: '/mailings',
-    icon: <Radio size={20} />,
-    roles: ALL_ROLES,
-    children: [
-      {
-        label: 'Аккаунты',
-        href: '/mailings/accounts',
-        icon: <Contact size={16} />,
-        roles: ALL_ROLES,
-      },
-      {
-        label: 'Чёрный список',
-        href: '/mailings/blocked',
-        icon: <ShieldBan size={16} />,
-        roles: ALL_ROLES,
-      },
-      {
-        label: 'Статистика',
-        href: '/mailings/statistics',
-        icon: <BarChart2 size={16} />,
-        roles: ALL_ROLES,
-      },
-    ],
-  },
-  {
-    label: 'Instances',
-    href: '/instances',
-    icon: <Smartphone size={20} />,
-    roles: ALL_ROLES,
-  },
-  {
     label: 'Мессенджер',
     href: '/messenger',
     icon: <MessageCircle size={20} />,
-    roles: ALL_ROLES,
-  },
-  {
-    label: 'Криптосделки',
-    href: '/crypto-deals',
-    icon: <Coins size={20} />,
-    roles: ALL_ROLES,
-  },
-  {
-    label: 'API',
-    href: '/api',
-    icon: <Key size={20} />,
     roles: ALL_ROLES,
   },
   {
@@ -248,6 +137,7 @@ interface SidebarProps {
   };
   onLogout: () => void;
   onSettingsChange?: (settings: UserSettings) => void;
+  messengerUnread?: number;
 }
 
 function getRoleIcon(role: Role) {
@@ -264,7 +154,7 @@ function getRoleIcon(role: Role) {
   return map[role] || <UserCircle size={14} />;
 }
 
-export default function Sidebar({ user, onLogout, onSettingsChange }: SidebarProps) {
+export default function Sidebar({ user, onLogout, onSettingsChange, messengerUnread = 0 }: SidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -294,7 +184,12 @@ export default function Sidebar({ user, onLogout, onSettingsChange }: SidebarPro
                 )}
               >
                 {item.icon}
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {item.href === '/messenger' && messengerUnread > 0 && (
+                  <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold rounded-full bg-red-500 text-white">
+                    {messengerUnread > 99 ? '99+' : messengerUnread}
+                  </span>
+                )}
               </Link>
               {item.children && isExpanded && (
                 <div className="ml-4 mt-1 space-y-0.5 border-l border-white/10 pl-3">
@@ -325,7 +220,6 @@ export default function Sidebar({ user, onLogout, onSettingsChange }: SidebarPro
           );
         })}
 
-        <SshSidebarSection />
       </nav>
 
       <div className="border-t border-white/10">

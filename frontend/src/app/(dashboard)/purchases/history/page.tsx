@@ -1,81 +1,115 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import Header from '@/components/header';
 import { api } from '@/lib/api';
 import { UserPurchaseHistory, PaginatedResponse } from '@/types';
 import {
   ArrowLeft,
-  ChevronLeft,
-  ChevronRight,
-  Search,
-  Clock,
   ExternalLink,
   Trash2,
+  Clock,
+  Search,
+  ChevronDown,
+  ChevronUp,
+  X,
+  Loader2,
 } from 'lucide-react';
 import Link from 'next/link';
 
 function formatPrice(price: number | null, currency: string | null): string {
   if (price === null) return '—';
-  const formatted = new Intl.NumberFormat('ru-RU', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(price);
-  return `${formatted} ${currency || '₽'}`;
+  return `${new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(price)} ${currency || '₽'}`;
+}
+
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 function formatDateTime(dateStr: string): string {
   return new Date(dateStr).toLocaleString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
   });
+}
+
+interface Group {
+  key: string;       // searchQuery string or '__null__'
+  label: string;
+  items: UserPurchaseHistory[];
+  lastDate: string;
 }
 
 export default function PurchaseHistoryPage() {
   const { user } = useAuth();
   const [history, setHistory] = useState<UserPurchaseHistory[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const limit = 20;
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [deletingGroup, setDeletingGroup] = useState<string | null>(null);
 
   const fetchHistory = useCallback(async () => {
     setLoading(true);
     try {
       const res = await api.get<PaginatedResponse<UserPurchaseHistory>>(
-        `/purchases/history?page=${page}&limit=${limit}`,
+        '/purchases/history?page=1&limit=500',
       );
       setHistory(res.data);
-      setTotal(res.total);
-    } catch (err) {
-      console.error(err);
+    } catch {
+      // ignore
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, []);
 
   useEffect(() => {
     fetchHistory();
   }, [fetchHistory]);
 
-  const handleDelete = useCallback(async (id: string) => {
-    if (!confirm('Удалить запись из истории?')) return;
+  const groups = useMemo<Group[]>(() => {
+    const map = new Map<string, Group>();
+    for (const item of history) {
+      const key = item.searchQuery ?? '__null__';
+      const label = item.searchQuery || 'Без поискового запроса';
+      if (!map.has(key)) {
+        map.set(key, { key, label, items: [], lastDate: item.foundAt });
+      }
+      map.get(key)!.items.push(item);
+    }
+    return Array.from(map.values());
+  }, [history]);
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const handleDeleteGroup = async (key: string, label: string | null) => {
+    if (!confirm(`Удалить всю историю по запросу "${label || 'Без поискового запроса'}"?`)) return;
+    setDeletingGroup(key);
+    try {
+      const q = key === '__null__' ? '' : encodeURIComponent(key);
+      await api.delete(`/purchases/history/by-query${q ? `?q=${q}` : ''}`);
+      setHistory((prev) => prev.filter((item) => (item.searchQuery ?? '__null__') !== key));
+    } catch {
+      // ignore
+    } finally {
+      setDeletingGroup(null);
+    }
+  };
+
+  const handleDeleteItem = async (id: string) => {
     try {
       await api.delete(`/purchases/history/${id}`);
       setHistory((prev) => prev.filter((item) => item.id !== id));
-      setTotal((prev) => prev - 1);
     } catch {
       // ignore
     }
-  }, []);
+  };
 
   if (!user) return null;
-
-  const totalPages = Math.ceil(total / limit);
 
   return (
     <>
@@ -83,141 +117,104 @@ export default function PurchaseHistoryPage() {
       <div className="p-6">
         <Link
           href="/purchases"
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors mb-4"
+          className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors mb-6"
         >
-          <ArrowLeft size={16} />
-          Назад к поиску
+          <ArrowLeft size={16} /> Назад к поиску
         </Link>
 
-        <div className="flex items-center justify-between mb-6">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Всего просмотров:{' '}
-            <span className="font-medium text-gray-700 dark:text-gray-300">{total}</span>
-          </p>
-        </div>
-
-        <div className="card overflow-hidden p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
-                  <th className="text-left px-6 py-3 font-medium text-gray-500 dark:text-gray-400">
-                    Номер закупки
-                  </th>
-                  <th className="text-left px-6 py-3 font-medium text-gray-500 dark:text-gray-400">
-                    Описание
-                  </th>
-                  <th className="text-left px-6 py-3 font-medium text-gray-500 dark:text-gray-400">
-                    Поисковый запрос
-                  </th>
-                  <th className="text-right px-6 py-3 font-medium text-gray-500 dark:text-gray-400">
-                    Цена
-                  </th>
-                  <th className="text-right px-6 py-3 font-medium text-gray-500 dark:text-gray-400">
-                    Дата просмотра
-                  </th>
-                  <th className="px-6 py-3 w-12"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {loading ? (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
-                      <div className="flex items-center justify-center">
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600" />
-                      </div>
-                    </td>
-                  </tr>
-                ) : history.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center">
-                      <Clock size={32} className="mx-auto text-gray-300 dark:text-gray-600 mb-2" />
-                      <p className="text-gray-400">История просмотров пуста</p>
-                      <Link
-                        href="/purchases"
-                        className="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 mt-2"
-                      >
-                        <Search size={14} />
-                        Перейти к поиску
-                      </Link>
-                    </td>
-                  </tr>
-                ) : (
-                  history.map((item) => (
-                    <tr
-                      key={item.id}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
-                    >
-                      <td className="px-6 py-4">
-                        <Link
-                          href={`/purchases/${item.purchase.purchaseNumber}`}
-                          className="flex items-center gap-1 text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium transition-colors"
-                        >
-                          {item.purchase.purchaseNumber}
-                          <ExternalLink size={12} />
-                        </Link>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-gray-700 dark:text-gray-300 truncate max-w-xs">
-                          {item.purchase.objectInfo || '—'}
-                        </p>
-                      </td>
-                      <td className="px-6 py-4">
-                        {item.searchQuery ? (
-                          <span className="inline-flex items-center gap-1 text-gray-600 dark:text-gray-400 text-xs">
-                            <Search size={12} />
-                            {item.searchQuery}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-right whitespace-nowrap text-gray-700 dark:text-gray-300">
-                        {formatPrice(item.purchase.maxPrice, item.purchase.currencyCode)}
-                      </td>
-                      <td className="px-6 py-4 text-right whitespace-nowrap text-gray-500 dark:text-gray-400 text-xs">
-                        {formatDateTime(item.foundAt)}
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="p-1 rounded text-gray-400 hover:text-red-500 transition-colors"
-                          title="Удалить"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
           </div>
+        ) : history.length === 0 ? (
+          <div className="card text-center py-12">
+            <Clock size={48} className="mx-auto text-gray-300 dark:text-gray-600 mb-4" />
+            <p className="text-gray-500 dark:text-gray-400">История просмотров пуста</p>
+            <Link href="/purchases" className="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 mt-2">
+              <Search size={14} /> Перейти к поиску
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {groups.map((group) => {
+              const isExpanded = expandedGroups.has(group.key);
+              return (
+                <div key={group.key} className="card p-0 overflow-hidden">
+                  {/* Group header */}
+                  <div
+                    className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    onClick={() => toggleGroup(group.key)}
+                  >
+                    <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 shrink-0">
+                      <Search size={14} className="text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                        {group.label}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        {group.items.length} {group.items.length === 1 ? 'просмотр' : group.items.length < 5 ? 'просмотра' : 'просмотров'} · Последний: {formatDate(group.lastDate)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => handleDeleteGroup(group.key, group.key === '__null__' ? null : group.label)}
+                        disabled={deletingGroup === group.key}
+                        className="flex items-center gap-1 px-2 py-1 text-xs text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors disabled:opacity-50"
+                        title="Очистить группу"
+                      >
+                        {deletingGroup === group.key ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
+                        Очистить
+                      </button>
+                    </div>
+                    {isExpanded ? (
+                      <ChevronUp size={16} className="text-gray-400 shrink-0" />
+                    ) : (
+                      <ChevronDown size={16} className="text-gray-400 shrink-0" />
+                    )}
+                  </div>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Страница {page} из {totalPages}
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="btn-secondary !py-2 !px-3 disabled:opacity-50"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="btn-secondary !py-2 !px-3 disabled:opacity-50"
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+                  {/* Group items */}
+                  {isExpanded && (
+                    <div className="border-t border-gray-100 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+                      {group.items.map((item) => (
+                        <div key={item.id} className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/20 transition-colors">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <Link
+                                href={`/purchases/${item.purchase.purchaseNumber}`}
+                                className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium transition-colors"
+                              >
+                                {item.purchase.purchaseNumber}
+                                <ExternalLink size={11} />
+                              </Link>
+                            </div>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 truncate mt-0.5">
+                              {item.purchase.objectInfo || '—'}
+                            </p>
+                          </div>
+                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap shrink-0">
+                            {formatPrice(item.purchase.maxPrice, item.purchase.currencyCode)}
+                          </p>
+                          <p className="text-xs text-gray-400 whitespace-nowrap shrink-0">
+                            {formatDateTime(item.foundAt)}
+                          </p>
+                          <button
+                            onClick={() => handleDeleteItem(item.id)}
+                            className="p-1 rounded text-gray-400 hover:text-red-500 transition-colors shrink-0"
+                            title="Удалить"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </>
   );

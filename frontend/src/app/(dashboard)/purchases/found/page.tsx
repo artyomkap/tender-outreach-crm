@@ -1,20 +1,22 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import Header from '@/components/header';
 import { api } from '@/lib/api';
 import { FoundPurchase, PaginatedResponse, PurchaseAiResult } from '@/types';
 import {
   FolderSearch,
-  ChevronLeft,
-  ChevronRight,
   ArrowLeft,
   ExternalLink,
   Star,
   Sparkles,
   Loader2,
   Trash2,
+  ChevronDown,
+  ChevronUp,
+  Search,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 import MagicButtonCompact from '@/components/magic-button-compact';
@@ -29,57 +31,96 @@ const STAGE_LABELS: Record<number, string> = {
 
 function formatPrice(price: number | null, currency: string | null): string {
   if (price === null) return '—';
-  const formatted = new Intl.NumberFormat('ru-RU', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(price);
-  return `${formatted} ${currency || '₽'}`;
+  return `${new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(price)} ${currency || '₽'}`;
 }
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+  return new Date(dateStr).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+interface Group {
+  key: string; // searchQueryId or 'null'
+  label: string;
+  items: FoundPurchase[];
+  date: string;
 }
 
 export default function FoundPurchasesPage() {
   const { user } = useAuth();
   const [data, setData] = useState<FoundPurchase[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const limit = 20;
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [preparingId, setPreparingId] = useState<string | null>(null);
+  const [deletingGroup, setDeletingGroup] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get<PaginatedResponse<FoundPurchase>>(
-        `/purchases/found?page=${page}&limit=${limit}`,
-      );
+      // Load up to 500 items so we can group client-side
+      const res = await api.get<PaginatedResponse<FoundPurchase>>('/purchases/found?page=1&limit=500');
       setData(res.data);
-      setTotal(res.total);
     } catch {
       // ignore
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, []);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  const [preparingId, setPreparingId] = useState<string | null>(null);
+  const groups = useMemo<Group[]>(() => {
+    const map = new Map<string, Group>();
+    for (const item of data) {
+      const key = item.searchQueryId ?? 'null';
+      const label =
+        (item.searchQuery?.queryParams?.objectInfo as string | undefined) ||
+        'Без поискового запроса';
+      if (!map.has(key)) {
+        map.set(key, { key, label, items: [], date: item.createdAt });
+      }
+      map.get(key)!.items.push(item);
+    }
+    return Array.from(map.values());
+  }, [data]);
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const handleDeleteGroup = async (key: string) => {
+    if (!confirm('Удалить все найденные закупки этого поискового запроса?')) return;
+    setDeletingGroup(key);
+    try {
+      await api.delete(`/purchases/found/by-query/${key}`);
+      setData((prev) => prev.filter((item) => (item.searchQueryId ?? 'null') !== key));
+    } catch {
+      // ignore
+    } finally {
+      setDeletingGroup(null);
+    }
+  };
+
+  const handleDeleteItem = async (id: string) => {
+    try {
+      await api.delete(`/purchases/found/${id}`);
+      setData((prev) => prev.filter((item) => item.id !== id));
+    } catch {
+      // ignore
+    }
+  };
 
   const handlePrepare = useCallback(async (purchaseId: string) => {
     if (preparingId) return;
     setPreparingId(purchaseId);
     try {
       await api.post<PurchaseAiResult>(`/purchases/${purchaseId}/prepare`, {});
-      alert('AI-анализ завершён');
       fetchData();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ошибка AI-анализа');
@@ -87,17 +128,6 @@ export default function FoundPurchasesPage() {
       setPreparingId(null);
     }
   }, [preparingId, fetchData]);
-
-  const handleDelete = useCallback(async (id: string) => {
-    if (!confirm('Удалить найденную закупку?')) return;
-    try {
-      await api.delete(`/purchases/found/${id}`);
-      setData((prev) => prev.filter((item) => item.id !== id));
-      setTotal((prev) => prev - 1);
-    } catch {
-      // ignore
-    }
-  }, []);
 
   const toggleFavorite = useCallback(async (purchaseId: string) => {
     try {
@@ -112,8 +142,6 @@ export default function FoundPurchasesPage() {
     }
   }, []);
 
-  const totalPages = Math.ceil(total / limit);
-
   if (!user) return null;
 
   return (
@@ -123,17 +151,15 @@ export default function FoundPurchasesPage() {
         <div className="flex items-center gap-4 mb-6">
           <Link
             href="/purchases"
-            className="flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
+            className="flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 transition-colors"
           >
-            <ArrowLeft size={16} />
-            Назад к поиску
+            <ArrowLeft size={16} /> Назад к поиску
           </Link>
           <Link
             href="/purchases/favorites"
-            className="flex items-center gap-1.5 text-sm text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 transition-colors ml-auto"
+            className="flex items-center gap-1.5 text-sm text-amber-600 hover:text-amber-700 dark:text-amber-400 transition-colors ml-auto"
           >
-            <Star size={16} />
-            Избранное
+            <Star size={16} /> Избранное
           </Link>
         </div>
 
@@ -150,138 +176,141 @@ export default function FoundPurchasesPage() {
             </p>
           </div>
         ) : (
-          <>
-            <div className="space-y-4">
-              {data.map((item) => (
-                <div key={item.id} className="card hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between gap-4">
+          <div className="space-y-3">
+            {groups.map((group) => {
+              const isExpanded = expandedGroups.has(group.key);
+              return (
+                <div key={group.key} className="card p-0 overflow-hidden">
+                  {/* Group header */}
+                  <div
+                    className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    onClick={() => toggleGroup(group.key)}
+                  >
+                    <div className="p-1.5 rounded-lg bg-primary-50 dark:bg-primary-900/30 shrink-0">
+                      <Search size={14} className="text-primary-600 dark:text-primary-400" />
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Link
-                          href={`/purchases/${item.purchase.purchaseNumber}`}
-                          className="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium text-sm transition-colors"
-                        >
-                          {item.purchase.purchaseNumber}
-                        </Link>
-                        {item.purchase.stage !== null && (
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                              item.purchase.stage === 1
-                                ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                                : item.purchase.stage === 3
-                                  ? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                                  : item.purchase.stage === 4
-                                    ? 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400'
-                                    : 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                            }`}
-                          >
-                            {STAGE_LABELS[item.purchase.stage] || `Этап ${item.purchase.stage}`}
-                          </span>
-                        )}
-                        {item.isFavorite && (
-                          <Star size={14} className="text-amber-500" fill="currentColor" />
-                        )}
-                      </div>
-                      <p className="text-gray-900 dark:text-gray-100 text-sm leading-relaxed line-clamp-2">
-                        {item.purchase.objectInfo || 'Без описания'}
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                        {group.label}
                       </p>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-500 dark:text-gray-400">
-                        <span>Найдено: {formatDate(item.createdAt)}</span>
-                        {item.purchase.publishedAt && (
-                          <span>Опубликовано: {formatDate(item.purchase.publishedAt)}</span>
-                        )}
-                      </div>
-                      <div className="mt-2">
-                        <PipelineStatusBar
-                          purchaseId={item.purchase.id}
-                          savedDocsCount={item.savedDocsCount}
-                          totalDocsCount={item.totalDocsCount}
-                          aiResult={item.aiResult}
-                          sitesCount={item.sitesCount}
-                          emailsCount={item.emailsCount}
-                        />
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 shrink-0">
-                      <p className="text-lg font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
-                        {formatPrice(item.purchase.maxPrice, item.purchase.currencyCode)}
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        {group.items.length} {group.items.length === 1 ? 'закупка' : group.items.length < 5 ? 'закупки' : 'закупок'} · Найдено: {formatDate(group.date)}
                       </p>
-                      <div className="flex items-center gap-2">
-                        <MagicButtonCompact
-                          purchaseId={item.purchase.id}
-                          onComplete={fetchData}
-                        />
-                        <button
-                          onClick={() => handlePrepare(item.purchase.id)}
-                          disabled={preparingId === item.purchase.id}
-                          className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 rounded-md hover:bg-violet-100 dark:hover:bg-violet-900/50 transition-colors disabled:opacity-50"
-                          title="AI-анализ"
-                        >
-                          {preparingId === item.purchase.id ? (
-                            <Loader2 size={14} className="animate-spin" />
-                          ) : (
-                            <Sparkles size={14} />
-                          )}
-                          Prepare
-                        </button>
-                        <button
-                          onClick={() => toggleFavorite(item.purchaseId)}
-                          className={`p-1.5 rounded-lg transition-colors ${
-                            item.isFavorite
-                              ? 'text-amber-500 hover:text-amber-600'
-                              : 'text-gray-400 hover:text-amber-500'
-                          }`}
-                          title={item.isFavorite ? 'Убрать из избранного' : 'В избранное'}
-                        >
-                          <Star size={18} fill={item.isFavorite ? 'currentColor' : 'none'} />
-                        </button>
-                        <Link
-                          href={`/purchases/${item.purchase.purchaseNumber}`}
-                          className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 transition-colors"
-                        >
-                          Подробнее <ExternalLink size={12} />
-                        </Link>
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 transition-colors"
-                          title="Удалить"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
                     </div>
+                    <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => handleDeleteGroup(group.key)}
+                        disabled={deletingGroup === group.key}
+                        className="flex items-center gap-1 px-2 py-1 text-xs text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors disabled:opacity-50"
+                        title="Очистить группу"
+                      >
+                        {deletingGroup === group.key ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
+                        Очистить
+                      </button>
+                    </div>
+                    {isExpanded ? (
+                      <ChevronUp size={16} className="text-gray-400 shrink-0" />
+                    ) : (
+                      <ChevronDown size={16} className="text-gray-400 shrink-0" />
+                    )}
                   </div>
-                </div>
-              ))}
-            </div>
 
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-6">
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Всего: {total}
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="btn-secondary !py-1.5 !px-3 disabled:opacity-50"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
-                    {page} / {totalPages}
-                  </span>
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    className="btn-secondary !py-1.5 !px-3 disabled:opacity-50"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
+                  {/* Group items */}
+                  {isExpanded && (
+                    <div className="border-t border-gray-100 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+                      {group.items.map((item) => (
+                        <div key={item.id} className="px-4 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/20 transition-colors">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1.5">
+                                <Link
+                                  href={`/purchases/${item.purchase.purchaseNumber}`}
+                                  className="text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium text-sm"
+                                >
+                                  {item.purchase.purchaseNumber}
+                                </Link>
+                                {item.purchase.stage !== null && (
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                    item.purchase.stage === 1
+                                      ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                      : item.purchase.stage === 3
+                                        ? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                        : item.purchase.stage === 4
+                                          ? 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                                          : 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                  }`}>
+                                    {STAGE_LABELS[item.purchase.stage] || `Этап ${item.purchase.stage}`}
+                                  </span>
+                                )}
+                                {item.isFavorite && (
+                                  <Star size={12} className="text-amber-500" fill="currentColor" />
+                                )}
+                              </div>
+                              <p className="text-gray-800 dark:text-gray-200 text-sm leading-relaxed line-clamp-2">
+                                {item.purchase.objectInfo || 'Без описания'}
+                              </p>
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5 text-xs text-gray-400">
+                                <span>Найдено: {formatDate(item.createdAt)}</span>
+                                {item.purchase.publishedAt && <span>Опубл.: {formatDate(item.purchase.publishedAt)}</span>}
+                              </div>
+                              <div className="mt-2">
+                                <PipelineStatusBar
+                                  purchaseId={item.purchase.id}
+                                  savedDocsCount={item.savedDocsCount}
+                                  totalDocsCount={item.totalDocsCount}
+                                  aiResult={item.aiResult}
+                                  sitesCount={item.sitesCount}
+                                  emailsCount={item.emailsCount}
+                                />
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-2 shrink-0">
+                              <p className="text-base font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                                {formatPrice(item.purchase.maxPrice, item.purchase.currencyCode)}
+                              </p>
+                              <div className="flex items-center gap-1.5">
+                                <MagicButtonCompact purchaseId={item.purchase.id} onComplete={fetchData} />
+                                <button
+                                  onClick={() => handlePrepare(item.purchase.id)}
+                                  disabled={preparingId === item.purchase.id}
+                                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 rounded-md hover:bg-violet-100 dark:hover:bg-violet-900/50 transition-colors disabled:opacity-50"
+                                  title="AI-анализ"
+                                >
+                                  {preparingId === item.purchase.id ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                                  AI
+                                </button>
+                                <button
+                                  onClick={() => toggleFavorite(item.purchaseId)}
+                                  className={`p-1 rounded-lg transition-colors ${item.isFavorite ? 'text-amber-500 hover:text-amber-600' : 'text-gray-400 hover:text-amber-500'}`}
+                                  title={item.isFavorite ? 'Убрать из избранного' : 'В избранное'}
+                                >
+                                  <Star size={16} fill={item.isFavorite ? 'currentColor' : 'none'} />
+                                </button>
+                                <Link
+                                  href={`/purchases/${item.purchase.purchaseNumber}`}
+                                  className="p-1 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+                                  title="Подробнее"
+                                >
+                                  <ExternalLink size={14} />
+                                </Link>
+                                <button
+                                  onClick={() => handleDeleteItem(item.id)}
+                                  className="p-1 rounded-lg text-gray-400 hover:text-red-500 transition-colors"
+                                  title="Удалить"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
-          </>
+              );
+            })}
+          </div>
         )}
       </div>
     </>

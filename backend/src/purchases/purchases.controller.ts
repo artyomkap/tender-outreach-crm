@@ -77,6 +77,11 @@ export class PurchasesController {
     return this.purchasesService.getHistory(user.id, page, limit);
   }
 
+  @Get('files/:fileId/preview-content')
+  getFilePreviewContent(@Param('fileId') fileId: string) {
+    return this.purchasesService.getFilePreviewContent(fileId);
+  }
+
   @Post('files/:fileId/parse')
   parseFile(
     @Param('fileId') fileId: string,
@@ -167,6 +172,17 @@ export class PurchasesController {
     return this.purchasesService.preparePurchase(purchaseId, user);
   }
 
+  @Post(':purchaseId/approve-to-outreach')
+  approveToOutreach(
+    @Param('purchaseId') purchaseId: string,
+    @CurrentUser() user: User,
+    @Body('emails') emails: string[],
+    @Body('subject') subject: string,
+    @Body('body') body: string,
+  ) {
+    return this.purchasesService.approveToOutreach(purchaseId, user.id, { emails, subject, body });
+  }
+
   @Get(':purchaseId/ai-result')
   getAiResult(
     @Param('purchaseId') purchaseId: string,
@@ -208,6 +224,15 @@ export class PurchasesController {
     return this.purchasesService.removeFromBlacklist(user.id, email);
   }
 
+  @Delete('found/by-query/:searchQueryId')
+  deleteFoundPurchasesByQueryId(
+    @Param('searchQueryId') searchQueryId: string,
+    @CurrentUser() user: User,
+  ) {
+    const qid = searchQueryId === 'null' ? null : searchQueryId;
+    return this.purchasesService.deleteFoundPurchasesByQueryId(qid, user.id);
+  }
+
   @Delete('found/:id')
   deleteFoundPurchase(
     @Param('id') id: string,
@@ -222,6 +247,15 @@ export class PurchasesController {
     @CurrentUser() user: User,
   ) {
     return this.purchasesService.deleteSearchQuery(id, user.id);
+  }
+
+  @Delete('history/by-query')
+  deleteHistoryByQuery(
+    @Query('q') searchQuery: string | undefined,
+    @CurrentUser() user: User,
+  ) {
+    const q = searchQuery === undefined || searchQuery === '' ? null : searchQuery;
+    return this.purchasesService.deleteHistoryByQuery(q, user.id);
   }
 
   @Delete('history/:id')

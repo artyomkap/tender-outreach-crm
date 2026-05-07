@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { Subject } from 'rxjs';
 import { EmailMessage } from './entities/email-message.entity';
 import * as nodemailer from 'nodemailer';
 import * as dns from 'dns';
@@ -26,11 +27,19 @@ interface ImapSettings {
 @Injectable()
 export class EmailsService {
   private readonly logger = new Logger(EmailsService.name);
+  private readonly emailStreams = new Map<string, Subject<{ from: string; subject: string }>>();
 
   constructor(
     @InjectRepository(EmailMessage)
     private readonly emailMessageRepository: Repository<EmailMessage>,
   ) {}
+
+  getOrCreateStream(userId: string) {
+    if (!this.emailStreams.has(userId)) {
+      this.emailStreams.set(userId, new Subject());
+    }
+    return this.emailStreams.get(userId)!;
+  }
 
   // --- Send email via SMTP (direct or relay) ---
 
@@ -300,6 +309,9 @@ export class EmailsService {
 
           await this.emailMessageRepository.save(emailMsg);
           fetched++;
+
+          const stream = this.emailStreams.get(userId);
+          if (stream) stream.next({ from: fromAddr, subject });
         }
       } finally {
         lock.release();

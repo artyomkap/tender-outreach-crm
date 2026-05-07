@@ -6,7 +6,6 @@ import Header from '@/components/header';
 import { api } from '@/lib/api';
 import { Purchase, PurchaseFile, PurchaseAiResult } from '@/types';
 import {
-  ArrowLeft,
   FileDown,
   Calendar,
   Banknote,
@@ -16,13 +15,13 @@ import {
   FileText,
   Eye,
   Save,
-  BookOpen,
   Loader2,
   X,
   Sparkles,
   Search,
   Mail,
   MessageSquare,
+  Wand2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -80,28 +79,29 @@ export default function PurchaseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [savingFileId, setSavingFileId] = useState<string | null>(null);
+  const [previewingFileId, setPreviewingFileId] = useState<string | null>(null);
   const [viewingFile, setViewingFile] = useState<PurchaseFile | null>(null);
   const [aiResult, setAiResult] = useState<PurchaseAiResult | null>(null);
   const [preparing, setPreparing] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const [approveResult, setApproveResult] = useState<{ campaignId: string } | null>(null);
+  const [approveError, setApproveError] = useState('');
 
-  const handlePreview = (file: PurchaseFile) => {
-    const parserDocsUrl = user?.settings?.parserDocsUrl;
-    const proxyUrl = user?.settings?.proxyUrl;
-
-    if (!parserDocsUrl || !proxyUrl) {
-      alert('Настройте Parser Docs URL и Proxy URL в профиле');
+  const handlePreview = async (file: PurchaseFile) => {
+    if (file.parsedText) {
+      setViewingFile(file);
       return;
     }
-
+    setPreviewingFileId(file.id);
     try {
-      const encodedFileUrl = encodeURIComponent(file.url);
-      const proxiedUrl = proxyUrl + encodedFileUrl;
-      const encodedProxiedUrl = encodeURIComponent(proxiedUrl);
-      const finalUrl = parserDocsUrl + encodedProxiedUrl;
-
-      window.open(finalUrl, '_blank');
+      const { text, fileName } = await api.get<{ text: string; fileName: string }>(
+        `/purchases/files/${file.id}/preview-content`,
+      );
+      setViewingFile({ ...file, parsedText: text, fileName });
     } catch (err) {
-      alert('Ошибка открытия документа');
+      alert(err instanceof Error ? err.message : 'Ошибка предпросмотра документа');
+    } finally {
+      setPreviewingFileId(null);
     }
   };
 
@@ -138,6 +138,20 @@ export default function PurchaseDetailPage() {
     }
   };
 
+  const handleApprove = async (data: { emails: string[]; subject: string; body: string }) => {
+    if (!purchase || approving) return;
+    setApproving(true);
+    setApproveError('');
+    try {
+      const result = await api.post<{ campaignId: string }>(`/purchases/${purchase.id}/approve-to-outreach`, data);
+      setApproveResult(result);
+    } catch (err) {
+      setApproveError(err instanceof Error ? err.message : 'Ошибка создания кампании');
+    } finally {
+      setApproving(false);
+    }
+  };
+
   useEffect(() => {
     if (!purchaseNumber) return;
 
@@ -165,15 +179,18 @@ export default function PurchaseDetailPage() {
 
   return (
     <>
-      <Header title="Детали закупки" user={user} />
+      <Header title={`Тендер №${purchaseNumber}`} user={user} />
       <div className="p-6">
-        <Link
-          href="/purchases"
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors mb-4"
-        >
-          <ArrowLeft size={16} />
-          Назад к поиску
-        </Link>
+        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-4">
+          <Link
+            href="/purchases"
+            className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+          >
+            Тендеры
+          </Link>
+          <span>/</span>
+          <span className="text-gray-900 dark:text-gray-100 font-medium">№{purchaseNumber}</span>
+        </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-20">
@@ -208,24 +225,9 @@ export default function PurchaseDetailPage() {
                     </span>
                   )}
                 </div>
-                <div className="flex flex-col items-end gap-2">
-                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">
-                    {formatPrice(purchase.maxPrice, purchase.currencyCode)}
-                  </p>
-                  <MagicPipeline
-                    purchase={purchase}
-                    onComplete={() => {
-                      // Reload AI result
-                      api.get<PurchaseAiResult | null>(`/purchases/${purchase.id}/ai-result`)
-                        .then((r) => { if (r) setAiResult(r); })
-                        .catch(() => {});
-                      // Reload purchase to get updated parsedText on files
-                      api.get<Purchase>(`/purchases/${purchaseNumber}`)
-                        .then((p) => setPurchase(p))
-                        .catch(() => {});
-                    }}
-                  />
-                </div>
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                  {formatPrice(purchase.maxPrice, purchase.currencyCode)}
+                </p>
               </div>
 
               <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
@@ -313,22 +315,18 @@ export default function PurchaseDetailPage() {
                       </div>
                       <button
                         onClick={() => handlePreview(file)}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors shrink-0"
+                        disabled={previewingFileId === file.id}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors shrink-0 disabled:opacity-60"
                         title="Предпросмотр документа"
                       >
-                        <Eye size={14} />
+                        {previewingFileId === file.id ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Eye size={14} />
+                        )}
                         Предпросмотр
                       </button>
-                      {file.parsedText ? (
-                        <button
-                          onClick={() => setViewingFile(file)}
-                          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 rounded-md hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors shrink-0"
-                          title="Просмотр сохранённого текста"
-                        >
-                          <BookOpen size={14} />
-                          Просмотр
-                        </button>
-                      ) : (
+                      {!file.parsedText && (
                         <button
                           onClick={() => handleSave(file)}
                           disabled={savingFileId === file.id}
@@ -357,28 +355,81 @@ export default function PurchaseDetailPage() {
                 </div>
               </div>
             )}
-            {/* AI Result */}
+            {/* Analysis & Outreach */}
             <div className="card">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                  <Sparkles size={16} className="text-violet-500" />
-                  AI-анализ
+              <div className="flex items-center gap-2 mb-4">
+                <Wand2 size={16} className="text-violet-500" />
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Анализ тендера
                 </h4>
-                <button
-                  onClick={handlePrepare}
-                  disabled={preparing}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 rounded-md hover:bg-violet-100 dark:hover:bg-violet-900/50 transition-colors disabled:opacity-50"
-                >
-                  {preparing ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : (
-                    <Sparkles size={14} />
-                  )}
-                  {preparing ? 'Анализ...' : aiResult ? 'Повторить' : 'Prepare'}
-                </button>
               </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                Запустите полный анализ: система разберёт документы, сгенерирует поисковый запрос через AI, найдёт сайты поставщиков и соберёт email-адреса.
+              </p>
 
-              {aiResult ? (
+              <MagicPipeline
+                purchase={purchase}
+                onComplete={() => {
+                  api.get<PurchaseAiResult | null>(`/purchases/${purchase.id}/ai-result`)
+                    .then((r) => { if (r) setAiResult(r); })
+                    .catch(() => {});
+                  api.get<Purchase>(`/purchases/${purchaseNumber}`)
+                    .then((p) => setPurchase(p))
+                    .catch(() => {});
+                }}
+                onApprove={handleApprove}
+              />
+
+              {approving && (
+                <div className="mt-4 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                  <Loader2 size={16} className="animate-spin" />
+                  Создаём кампанию в Email Outreach...
+                </div>
+              )}
+
+              {approveError && (
+                <div className="mt-4 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-sm px-4 py-3 rounded-lg border border-red-200 dark:border-red-800">
+                  {approveError}
+                </div>
+              )}
+
+              {approveResult && (
+                <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg">
+                  <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300 mb-2">
+                    Кампания создана в Email Outreach!
+                  </p>
+                  <Link
+                    href={`/outreach/campaigns`}
+                    className="inline-flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400 hover:underline"
+                  >
+                    Перейти в Email Outreach →
+                  </Link>
+                </div>
+              )}
+            </div>
+
+            {/* AI Result (from previous analysis) */}
+            {aiResult && (
+              <div className="card">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                    <Sparkles size={16} className="text-violet-500" />
+                    Результат AI-анализа
+                  </h4>
+                  <button
+                    onClick={handlePrepare}
+                    disabled={preparing}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 rounded-md hover:bg-violet-100 dark:hover:bg-violet-900/50 transition-colors disabled:opacity-50"
+                  >
+                    {preparing ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Sparkles size={14} />
+                    )}
+                    {preparing ? 'Анализ...' : 'Повторить'}
+                  </button>
+                </div>
+
                 <div className="space-y-4">
                   {aiResult.searchTerm && (
                     <div className="flex items-start gap-3 p-3 rounded-lg bg-violet-50 dark:bg-violet-900/20 border border-violet-100 dark:border-violet-800">
@@ -394,7 +445,7 @@ export default function PurchaseDetailPage() {
                     <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800">
                       <Mail size={16} className="text-blue-500 mt-0.5 shrink-0" />
                       <div>
-                        <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-1">Тема</p>
+                        <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-1">Тема письма</p>
                         <p className="text-sm text-gray-900 dark:text-gray-100">{aiResult.subject}</p>
                       </div>
                     </div>
@@ -404,7 +455,7 @@ export default function PurchaseDetailPage() {
                     <div className="flex items-start gap-3 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800">
                       <MessageSquare size={16} className="text-emerald-500 mt-0.5 shrink-0" />
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 mb-1">Содержание</p>
+                        <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 mb-1">Текст письма</p>
                         <pre className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words font-sans leading-relaxed">
                           {aiResult.body}
                         </pre>
@@ -412,12 +463,8 @@ export default function PurchaseDetailPage() {
                     </div>
                   )}
                 </div>
-              ) : (
-                <p className="text-sm text-gray-400 dark:text-gray-500">
-                  Нажмите &quot;Prepare&quot; для запуска AI-анализа. Убедитесь, что документы сохранены и настроены AI URL и промпт.
-                </p>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Saved text modal */}
             {viewingFile && (
