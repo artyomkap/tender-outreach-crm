@@ -291,7 +291,7 @@ function PurchasesContent() {
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Регион</label>
-                <input type="number" value={form.region} onChange={(e) => setForm((p) => ({ ...p, region: e.target.value }))} className="input-field" placeholder="Все" />
+                <input type="number" min="0" value={form.region} onChange={(e) => setForm((p) => ({ ...p, region: e.target.value.replace('-', '') }))} className="input-field" placeholder="Все" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Этап</label>
@@ -313,11 +313,11 @@ function PurchasesContent() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Цена от</label>
-                <input type="number" value={form.priceGe} onChange={(e) => setForm((p) => ({ ...p, priceGe: e.target.value }))} className="input-field" placeholder="0" />
+                <input type="number" min="0" value={form.priceGe} onChange={(e) => setForm((p) => ({ ...p, priceGe: e.target.value.replace('-', '') }))} className="input-field" placeholder="0" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Цена до</label>
-                <input type="number" value={form.priceLe} onChange={(e) => setForm((p) => ({ ...p, priceLe: e.target.value }))} className="input-field" placeholder="10000000" />
+                <input type="number" min="0" value={form.priceLe} onChange={(e) => setForm((p) => ({ ...p, priceLe: e.target.value.replace('-', '') }))} className="input-field" placeholder="10000000" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Результатов</label>

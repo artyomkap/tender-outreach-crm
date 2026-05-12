@@ -87,8 +87,11 @@ export class EmailsController {
   }
 
   @Post('fetch-inbox')
-  fetchInbox(@CurrentUser() user: User) {
-    return this.emailsService.fetchInbox(user.id, this.resolveEmailSettings(user));
+  fetchInbox(
+    @CurrentUser() user: User,
+    @Body('accountId') accountId?: string,
+  ) {
+    return this.emailsService.fetchInbox(user.id, this.resolveEmailSettings(user), accountId);
   }
 
   @Get('threads')
@@ -96,15 +99,17 @@ export class EmailsController {
     @CurrentUser() user: User,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+    @Query('accountId') accountId?: string,
   ) {
-    return this.emailsService.getThreads(user.id, page, limit);
+    return this.emailsService.getThreads(user.id, page, limit, accountId);
   }
 
   @Get('thread')
   getThread(
     @CurrentUser() user: User,
     @Query('email') email: string,
+    @Query('accountId') accountId?: string,
   ) {
-    return this.emailsService.getThread(user.id, email);
+    return this.emailsService.getThread(user.id, email, accountId);
   }
 }

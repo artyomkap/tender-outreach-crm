@@ -95,8 +95,8 @@ export default function MessengerPage() {
     if (!selectedAccount) return;
     setLoadingChats(true);
     try {
-      try { await api.post('/emails/fetch-inbox', {}); } catch { /* ignore */ }
-      const res = await api.get<{ data: EmailThread[]; total: number }>('/emails/threads?limit=100');
+      try { await api.post('/emails/fetch-inbox', { accountId: selectedAccount.id }); } catch { /* ignore */ }
+      const res = await api.get<{ data: EmailThread[]; total: number }>(`/emails/threads?limit=100&accountId=${encodeURIComponent(selectedAccount.id)}`);
       const list: Chat[] = (res.data || []).map((t) => ({
         id: t.contactEmail,
         name: t.contactEmail,
@@ -123,15 +123,17 @@ export default function MessengerPage() {
     fetchChats();
   }, [fetchChats]);
 
-  const fetchMessages = useCallback(async (chat: Chat) => {
+  const fetchMessages = useCallback(async (chat: Chat, accountId?: string) => {
     setLoadingMessages(true);
+    const accId = accountId ?? selectedAccount?.id;
     try {
-      const res = await api.get<EmailMsg[]>(`/emails/thread?email=${encodeURIComponent(chat.chatId)}`);
+      const accParam = accId ? `&accountId=${encodeURIComponent(accId)}` : '';
+      const res = await api.get<EmailMsg[]>(`/emails/thread?email=${encodeURIComponent(chat.chatId)}${accParam}`);
       const list: ChatMessage[] = (res || []).map((m) => ({
         id: m.id,
         body: m.bodyText || '',
         fromMe: m.direction === 'sent',
-        time: new Date(m.createdAt).getTime() / 1000,
+        time: new Date(m.emailDate || m.createdAt).getTime() / 1000,
         chatId: chat.chatId,
         subject: m.subject,
         bodyHtml: m.bodyHtml,
@@ -148,7 +150,7 @@ export default function MessengerPage() {
     } finally {
       setLoadingMessages(false);
     }
-  }, []);
+  }, [selectedAccount]);
 
   // SSE: auto-refresh when new email arrives
   useEffect(() => {
@@ -467,7 +469,7 @@ export default function MessengerPage() {
                     <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{activeChat.name}</p>
                   </div>
                   <button
-                    onClick={() => api.post('/emails/fetch-inbox', {}).finally(() => fetchMessages(activeChat))}
+                    onClick={() => api.post('/emails/fetch-inbox', { accountId: selectedAccount?.id }).finally(() => fetchMessages(activeChat))}
                     disabled={loadingMessages}
                     className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                     title="Обновить">

@@ -285,6 +285,7 @@ export interface EmailMessage {
   inReplyTo: string | null;
   purchaseId: string | null;
   isRead: boolean;
+  emailDate: string | null;
   createdAt: string;
 }
 

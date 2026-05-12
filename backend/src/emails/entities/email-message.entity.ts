@@ -52,6 +52,12 @@ export class EmailMessage {
   @Column({ name: 'is_read', type: 'boolean', default: false })
   isRead: boolean;
 
+  @Column({ name: 'account_id', type: 'uuid', nullable: true, default: null })
+  accountId: string | null;
+
+  @Column({ name: 'email_date', type: 'timestamp', nullable: true, default: null })
+  emailDate: Date | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

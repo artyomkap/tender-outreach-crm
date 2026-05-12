@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Subject } from 'rxjs';
 import { EmailMessage } from './entities/email-message.entity';
+import { OutreachEmailAccount } from '../outreach/entities/email-account.entity';
 import * as nodemailer from 'nodemailer';
 import * as dns from 'dns';
 
@@ -32,6 +33,8 @@ export class EmailsService {
   constructor(
     @InjectRepository(EmailMessage)
     private readonly emailMessageRepository: Repository<EmailMessage>,
+    @InjectRepository(OutreachEmailAccount)
+    private readonly emailAccountRepository: Repository<OutreachEmailAccount>,
   ) {}
 
   getOrCreateStream(userId: string) {
@@ -75,6 +78,7 @@ export class EmailsService {
       inReplyTo: inReplyTo || null,
       purchaseId: purchaseId || null,
       isRead: true,
+      emailDate: new Date(),
     });
 
     return this.emailMessageRepository.save(message);
@@ -209,8 +213,24 @@ export class EmailsService {
   async fetchInbox(
     userId: string,
     settings: ImapSettings & SmtpSettings,
+    accountId?: string,
   ): Promise<{ fetched: number }> {
-    const { imapHost, imapPort, imapUser, imapPass, imapSecure } = settings;
+    let imapHost = settings.imapHost;
+    let imapPort = settings.imapPort;
+    let imapUser = settings.imapUser;
+    let imapPass = settings.imapPass;
+    let imapSecure = settings.imapSecure;
+
+    if (accountId) {
+      const account = await this.emailAccountRepository.findOne({
+        where: { id: accountId, userId },
+      });
+      if (!account) throw new BadRequestException('Аккаунт не найден');
+      imapHost = account.imapHost ?? imapHost;
+      imapPort = account.imapPort ?? imapPort;
+      imapUser = account.imapUser ?? imapUser;
+      imapPass = account.imapPass ?? imapPass;
+    }
 
     if (!imapHost || !imapUser || !imapPass) {
       throw new BadRequestException(
@@ -225,10 +245,10 @@ export class EmailsService {
     const simpleParser = await this.loadSimpleParser();
 
     const client = new ImapFlow({
-      host: imapHost,
+      host: imapHost!,
       port: imapPort || (imapSecure ? 993 : 143),
       secure: imapSecure ?? true,
-      auth: { user: imapUser, pass: imapPass },
+      auth: { user: imapUser!, pass: imapPass! },
       logger: false,
       tls: { rejectUnauthorized: false },
     });
@@ -261,17 +281,25 @@ export class EmailsService {
               where: { userId, messageId },
             });
             if (existing) {
+              let needsSave = false;
+              // Backfill emailDate for old records
+              if (!existing.emailDate) {
+                existing.emailDate = envelope.date || new Date();
+                needsSave = true;
+              }
               // Re-parse old messages that have no bodyHtml
               if (existing.bodyHtml === null && msg.source) {
                 try {
                   const parsed = await simpleParser(msg.source);
                   existing.bodyText = parsed.text || existing.bodyText;
                   existing.bodyHtml = parsed.html || null;
-                  await this.emailMessageRepository.save(existing);
+                  if (!existing.emailDate && parsed.date) existing.emailDate = parsed.date;
+                  needsSave = true;
                 } catch {
                   // ignore re-parse errors
                 }
               }
+              if (needsSave) await this.emailMessageRepository.save(existing);
               continue;
             }
           }
@@ -283,12 +311,14 @@ export class EmailsService {
           // Parse the full MIME source to extract text and HTML bodies
           let bodyText = '';
           let bodyHtml: string | null = null;
+          let emailDate: Date = envelope.date || new Date();
 
           if (msg.source) {
             try {
               const parsed = await simpleParser(msg.source);
               bodyText = parsed.text || '';
               bodyHtml = parsed.html || null;
+              if (parsed.date) emailDate = parsed.date;
             } catch (parseErr: any) {
               this.logger.warn(`Failed to parse email MIME: ${parseErr.message}`);
               bodyText = msg.source.toString('utf-8');
@@ -305,6 +335,8 @@ export class EmailsService {
             messageId,
             inReplyTo: envelope.inReplyTo || null,
             isRead: false,
+            emailDate,
+            accountId: accountId || null,
           });
 
           await this.emailMessageRepository.save(emailMsg);
@@ -353,20 +385,25 @@ export class EmailsService {
     userId: string,
     page: number = 1,
     limit: number = 20,
+    accountId?: string,
   ): Promise<{ data: any[]; total: number }> {
     // Get unique contact emails with latest message info
-    const raw = await this.emailMessageRepository
+    const qb = this.emailMessageRepository
       .createQueryBuilder('m')
       .select('m.contact_email', 'contactEmail')
       .addSelect('COUNT(*)', 'messageCount')
-      .addSelect('MAX(m.created_at)', 'lastMessageAt')
+      .addSelect('MAX(COALESCE(m.email_date, m.created_at))', 'lastMessageAt')
       .addSelect(
         'SUM(CASE WHEN m.direction = \'received\' AND m.is_read = false THEN 1 ELSE 0 END)',
         'unreadCount',
       )
-      .where('m.user_id = :userId', { userId })
+      .where('m.user_id = :userId', { userId });
+
+    if (accountId) qb.andWhere('m.account_id = :accountId', { accountId });
+
+    const raw = await qb
       .groupBy('m.contact_email')
-      .orderBy('MAX(m.created_at)', 'DESC')
+      .orderBy('MAX(COALESCE(m.email_date, m.created_at))', 'DESC')
       .getRawMany();
 
     const total = raw.length;
@@ -376,10 +413,11 @@ export class EmailsService {
     // Enrich with latest message preview
     const threads = [];
     for (const row of paged) {
-      const lastMsg = await this.emailMessageRepository.findOne({
-        where: { userId, contactEmail: row.contactEmail },
-        order: { createdAt: 'DESC' },
-      });
+      const msgQb = this.emailMessageRepository
+        .createQueryBuilder('m')
+        .where('m.user_id = :userId AND m.contact_email = :email', { userId, email: row.contactEmail });
+      if (accountId) msgQb.andWhere('m.account_id = :accountId', { accountId });
+      const lastMsg = await msgQb.orderBy('COALESCE(m.email_date, m.created_at)', 'DESC').getOne();
 
       threads.push({
         contactEmail: row.contactEmail,
@@ -405,16 +443,17 @@ export class EmailsService {
   async getThread(
     userId: string,
     contactEmail: string,
+    accountId?: string,
   ): Promise<EmailMessage[]> {
-    // Mark received messages as read
-    await this.emailMessageRepository.update(
-      { userId, contactEmail, direction: 'received', isRead: false },
-      { isRead: true },
-    );
+    const where: any = { userId, contactEmail, direction: 'received', isRead: false };
+    if (accountId) where.accountId = accountId;
+    await this.emailMessageRepository.update(where, { isRead: true });
 
+    const findWhere: any = { userId, contactEmail };
+    if (accountId) findWhere.accountId = accountId;
     return this.emailMessageRepository.find({
-      where: { userId, contactEmail },
-      order: { createdAt: 'ASC' },
+      where: findWhere,
+      order: { emailDate: 'ASC', createdAt: 'ASC' },
     });
   }
 }

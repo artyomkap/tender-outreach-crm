@@ -2,7 +2,7 @@
 
 import { ROLE_LABELS } from '@/types';
 import type { User } from '@/types';
-import { Bell, Sun, Moon } from 'lucide-react';
+import { Sun, Moon } from 'lucide-react';
 import { useTheme } from '@/contexts/theme-context';
 
 interface HeaderProps {
@@ -27,10 +27,7 @@ export default function Header({ title, user }: HeaderProps) {
           >
             {colorMode === 'light' ? <Moon size={20} /> : <Sun size={20} />}
           </button>
-          <button className="relative p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-            <Bell size={20} />
-          </button>
-          <div className="hidden sm:flex items-center gap-3">
+<div className="hidden sm:flex items-center gap-3">
             <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
               {user.firstName[0]}
             </div>
