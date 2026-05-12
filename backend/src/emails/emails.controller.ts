@@ -74,6 +74,7 @@ export class EmailsController {
     @Body('body') body: string,
     @Body('purchaseId') purchaseId?: string,
     @Body('inReplyTo') inReplyTo?: string,
+    @Body('accountId') accountId?: string,
   ) {
     return this.emailsService.sendEmail(
       user.id,
@@ -83,6 +84,7 @@ export class EmailsController {
       body,
       purchaseId,
       inReplyTo,
+      accountId,
     );
   }
 

@@ -76,6 +76,7 @@ export default function MessengerPage() {
   const [modalEmail, setModalEmail] = useState<ChatMessage | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const activeChatRef = useRef<Chat | null>(null);
   useEffect(() => { activeChatRef.current = activeChat; }, [activeChat]);
@@ -184,30 +185,48 @@ export default function MessengerPage() {
   }, [activeChat, fetchMessages]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
   }, [messages]);
 
   const handleSend = useCallback(async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!activeChat || !msgText.trim() || sending) return;
     setSending(true);
+    const text = msgText.trim();
     try {
       const lastReceived = [...messages].reverse().find((m) => !m.fromMe);
       await api.post('/emails/send', {
         to: activeChat.chatId,
         subject: emailSubject || 'Без темы',
-        body: msgText.trim(),
+        body: text,
         inReplyTo: lastReceived?.emailMessageId || undefined,
+        accountId: selectedAccount?.id,
       });
       setMsgText('');
-      setTimeout(() => fetchMessages(activeChat), 500);
+      // Append sent message locally — no full re-render of thread
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `sent-${Date.now()}`,
+          body: text,
+          fromMe: true,
+          time: Date.now() / 1000,
+          chatId: activeChat.chatId,
+          subject: emailSubject || undefined,
+          bodyHtml: null,
+          bodyText: text,
+          emailMessageId: null,
+        },
+      ]);
     } catch {
       // ignore
     } finally {
       setSending(false);
       inputRef.current?.focus();
     }
-  }, [activeChat, msgText, sending, emailSubject, messages, fetchMessages]);
+  }, [activeChat, msgText, sending, emailSubject, messages]);
 
   const filteredChats = useMemo(() => {
     if (!chatSearch.trim()) return chats;
@@ -478,7 +497,7 @@ export default function MessengerPage() {
                 </div>
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto px-2 sm:px-4 py-3 space-y-2">
+                <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-2 sm:px-4 py-3 space-y-2">
                   {loadingMessages && messages.length === 0 ? (
                     <div className="flex items-center justify-center py-12">
                       <Loader2 size={24} className="animate-spin text-primary-600" />

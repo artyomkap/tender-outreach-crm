@@ -1,6 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull, Or, Equal } from 'typeorm';
 import { Subject } from 'rxjs';
 import { EmailMessage } from './entities/email-message.entity';
 import { OutreachEmailAccount } from '../outreach/entities/email-account.entity';
@@ -54,6 +54,7 @@ export class EmailsService {
     body: string,
     purchaseId?: string,
     inReplyTo?: string,
+    accountId?: string,
   ): Promise<EmailMessage> {
     const { smtpHost, smtpUser, smtpPass, smtpRelayUrl } = settings;
 
@@ -77,6 +78,7 @@ export class EmailsService {
       messageId: messageId || null,
       inReplyTo: inReplyTo || null,
       purchaseId: purchaseId || null,
+      accountId: accountId || null,
       isRead: true,
       emailDate: new Date(),
     });
@@ -282,6 +284,11 @@ export class EmailsService {
             });
             if (existing) {
               let needsSave = false;
+              // Backfill accountId for records fetched before account_id column existed
+              if (!existing.accountId && accountId) {
+                existing.accountId = accountId;
+                needsSave = true;
+              }
               // Backfill emailDate for old records
               if (!existing.emailDate) {
                 existing.emailDate = envelope.date || new Date();
@@ -445,15 +452,20 @@ export class EmailsService {
     contactEmail: string,
     accountId?: string,
   ): Promise<EmailMessage[]> {
-    const where: any = { userId, contactEmail, direction: 'received', isRead: false };
-    if (accountId) where.accountId = accountId;
-    await this.emailMessageRepository.update(where, { isRead: true });
+    const readWhere: any = { userId, contactEmail, direction: 'received', isRead: false };
+    if (accountId) readWhere.accountId = accountId;
+    await this.emailMessageRepository.update(readWhere, { isRead: true });
 
-    const findWhere: any = { userId, contactEmail };
-    if (accountId) findWhere.accountId = accountId;
-    return this.emailMessageRepository.find({
-      where: findWhere,
-      order: { emailDate: 'ASC', createdAt: 'ASC' },
-    });
+    const qb = this.emailMessageRepository
+      .createQueryBuilder('m')
+      .where('m.user_id = :userId AND m.contact_email = :contactEmail', { userId, contactEmail });
+
+    if (accountId) {
+      qb.andWhere('(m.account_id = :accountId OR m.account_id IS NULL)', { accountId });
+    }
+
+    return qb
+      .orderBy('COALESCE(m.email_date, m.created_at)', 'ASC')
+      .getMany();
   }
 }
